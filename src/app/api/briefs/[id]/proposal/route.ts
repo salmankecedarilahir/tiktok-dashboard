@@ -127,8 +127,7 @@ export async function GET(
       brief.campaignName.replace(/[^a-z0-9]/gi, "_") +
       ".pdf";
 
-    // @ts-expect-error - Node stream to Response body
-    return new NextResponse(pdfStream, {
+    return new NextResponse(pdfStream as unknown as ReadableStream, {
       headers: {
         "Content-Type": "application/pdf",
         "Content-Disposition": 'attachment; filename="' + filename + '"',

@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { useSession } from "next-auth/react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
@@ -12,10 +13,11 @@ const SOURCES = ["TikTok DM", "Instagram DM", "Email", "WhatsApp", "Referral", "
 
 export default function NewBriefPage() {
   const router = useRouter();
-  const [saving, setSaving] = useState(false);
-
+  const { data: session } = useSession();
+  const role = session?.user?.role;
   const today = new Date().toISOString().split("T")[0] ?? "";
 
+  const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({
     brandName: "",
     brandContact: "",
@@ -24,6 +26,16 @@ export default function NewBriefPage() {
     assignedTo: "",
     internalNotes: "",
   });
+
+  useEffect(() => {
+    if (role === "VIEWER") {
+      router.replace("/dashboard/briefs");
+    }
+  }, [role, router]);
+
+  if (role === "VIEWER") {
+    return null;
+  }
 
   function update<K extends keyof typeof form>(key: K, value: string) {
     setForm((f) => ({ ...f, [key]: value }));

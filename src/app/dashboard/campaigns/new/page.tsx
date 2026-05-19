@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { useSession } from "next-auth/react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
@@ -12,6 +13,8 @@ const PACKAGE_TYPES = ["Mapres", "Kating Gaul", "Cumlaude", "Custom"];
 
 export default function NewCampaignPage() {
   const router = useRouter();
+  const { data: session } = useSession();
+  const role = session?.user?.role;
   const [saving, setSaving] = useState(false);
 
   const [form, setForm] = useState({
@@ -23,6 +26,16 @@ export default function NewCampaignPage() {
     brandLogoUrl: "",
     notes: "",
   });
+
+  useEffect(() => {
+    if (role === "VIEWER") {
+      router.replace("/dashboard/campaigns");
+    }
+  }, [role, router]);
+
+  if (role === "VIEWER") {
+    return null;
+  }
 
   function update<K extends keyof typeof form>(key: K, value: string) {
     setForm((f) => ({ ...f, [key]: value }));
