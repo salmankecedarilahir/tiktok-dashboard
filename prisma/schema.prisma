@@ -1,0 +1,205 @@
+generator client {
+  provider      = "prisma-client-js"
+  // binaryTargets penting kalau deploy ke Vercel (rhel-openssl)
+  binaryTargets = ["native", "rhel-openssl-3.0.x"]
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+/// Static metadata setiap video. Insert sekali, jarang di-update.
+model Video {
+  id              String   @id @default(uuid()) @db.Uuid
+  tiktokId        String   @unique @map("tiktok_id")
+  caption         String?  @db.Text
+  postedAt        DateTime @map("posted_at")
+  durationSeconds Int?     @map("duration_seconds")
+  thumbnailUrl    String?  @map("thumbnail_url")
+  videoUrl        String?  @map("video_url")
+  hashtags        String[] @default([])
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  snapshots VideoSnapshot[]
+
+  @@index([postedAt(sort: Desc)])
+  @@index([createdAt(sort: Desc)])
+  @@map("videos")
+}
+
+/// Time-series metrics. INSERT-only, never overwrite.
+model VideoSnapshot {
+  videoId       String   @map("video_id") @db.Uuid
+  capturedAt    DateTime @map("captured_at")
+  views         BigInt
+  likes         BigInt
+  commentsCount BigInt   @map("comments_count")
+  shares        BigInt   @default(0)
+  saves         BigInt   @default(0)
+
+  video Video @relation(fields: [videoId], references: [id], onDelete: Cascade)
+
+  @@id([videoId, capturedAt])
+  @@index([capturedAt(sort: Desc)])
+  @@map("video_snapshots")
+}
+
+/// Cache hasil rekomendasi. Refresh sekali sehari.
+model Recommendation {
+  id          String   @id @default(uuid()) @db.Uuid
+  kind        String // 'top_content' | 'posting_time' | 'hashtag_combo' | 'duration_bucket' | 'caption_pattern'
+  payload     Json
+  generatedAt DateTime @default(now()) @map("generated_at")
+
+  @@index([kind, generatedAt(sort: Desc)])
+  @@map("video_recommendations")
+}
+
+/// Scrape job log — untuk hardening + debugging cron failures.
+model ScrapeJob {
+  id             String    @id @default(uuid()) @db.Uuid
+  startedAt      DateTime  @default(now()) @map("started_at")
+  finishedAt     DateTime? @map("finished_at")
+  status         String // 'running' | 'success' | 'failed'
+  provider       String // 'mock' | 'tikapi' | 'csv'
+  videosFound    Int       @default(0) @map("videos_found")
+  videosNew      Int       @default(0) @map("videos_new")
+  snapshotsAdded Int       @default(0) @map("snapshots_added")
+  errorMessage   String?   @map("error_message") @db.Text
+  durationMs     Int?      @map("duration_ms")
+
+  @@index([startedAt(sort: Desc)])
+  @@index([status, startedAt(sort: Desc)])
+  @@map("scrape_jobs")
+}
+
+/// Daily channel metrics from TikTok Studio Overview.csv
+model DailyMetric {
+  id           String   @id @default(uuid()) @db.Uuid
+  date         DateTime @db.Date
+  videoViews   BigInt   @map("video_views")
+  profileViews BigInt   @map("profile_views")
+  likes        BigInt
+  comments     BigInt
+  shares       BigInt
+  importedAt   DateTime @default(now()) @map("imported_at")
+
+  @@unique([date])
+  @@index([date(sort: Desc)])
+  @@map("daily_metrics")
+}
+
+/// Channel-wide demographic & metadata config (manual input)
+model ChannelConfig {
+  id             String @id @default(uuid()) @db.Uuid
+  channelName    String @map("channel_name")
+  channelHandle  String @map("channel_handle")
+  totalFollowers Int    @default(0) @map("total_followers")
+
+  femalePercent    Float @default(0) @map("female_percent")
+  malePercent      Float @default(0) @map("male_percent")
+  age18_24Percent  Float @default(0) @map("age_18_24_percent")
+  age25_34Percent  Float @default(0) @map("age_25_34_percent")
+  age35plusPercent Float @default(0) @map("age_35_plus_percent")
+
+  topLocations Json @default("[]") @map("top_locations")
+
+  brandColor String  @default("#DC2626") @map("brand_color")
+  tagline    String?
+
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("channel_config")
+}
+
+/// Campaign for brand client
+model Campaign {
+  id           String   @id @default(uuid()) @db.Uuid
+  brandName    String   @map("brand_name")
+  brandLogoUrl String?  @map("brand_logo_url")
+  campaignName String   @map("campaign_name")
+  packageType  String?  @map("package_type")
+  startDate    DateTime @map("start_date")
+  endDate      DateTime @map("end_date")
+  notes        String?  @db.Text
+
+  videos    CampaignVideo[]
+  createdAt DateTime        @default(now()) @map("created_at")
+  updatedAt DateTime        @updatedAt @map("updated_at")
+
+  @@index([createdAt(sort: Desc)])
+  brief           Brief?
+  @@map("campaigns")
+}
+
+/// Per-video metrics for a campaign (manual input)
+model CampaignVideo {
+  id         String   @id @default(uuid()) @db.Uuid
+  campaignId String   @map("campaign_id") @db.Uuid
+  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  videoTitle      String   @map("video_title")
+  videoUrl        String?  @map("video_url")
+  postedAt        DateTime @map("posted_at")
+  durationSeconds Int?     @map("duration_seconds")
+
+  views           BigInt
+  likes           BigInt
+  comments        BigInt
+  shares          BigInt
+  saves           BigInt @default(0)
+  watchTimeAvgSec Float? @map("watch_time_avg_sec")
+
+  notes String? @db.Text
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([campaignId])
+  @@map("campaign_videos")
+}
+
+
+enum BriefStatus {
+  INQUIRY
+  NEGOTIATING
+  CONFIRMED
+  ACTIVE
+  DONE
+  ARCHIVED
+}
+
+model Brief {
+  id              String      @id @default(uuid()) @db.Uuid
+  brandName       String
+  brandContact    String?
+  inquiryDate     DateTime
+  source          String?
+  status          BriefStatus @default(INQUIRY)
+
+  campaignName    String?
+  description     String?
+  packageType     String?
+  customPrice     Int?
+  deliverables    String?
+  startDate       DateTime?
+  endDate         DateTime?
+  viewsGuarantee  Int?
+  requirements    String?
+
+  assignedTo      String?
+  internalNotes   String?
+  brandNotes      String?
+
+  campaignId      String?     @unique @db.Uuid
+  campaign        Campaign?   @relation(fields: [campaignId], references: [id])
+
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  @@index([status])
+  @@index([createdAt])
+  @@map("briefs")
+}
