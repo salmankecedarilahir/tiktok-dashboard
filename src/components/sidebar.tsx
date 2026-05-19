@@ -12,12 +12,14 @@ import {
   Upload,
   Sparkles,
   LogOut,
+  KeyRound,
 } from "lucide-react";
 import type { Session } from "next-auth";
 import type { Role } from "@prisma/client";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { ChangePasswordDialog } from "@/components/dashboard/change-password-dialog";
 
 interface BriefStats {
   active: number;
@@ -46,6 +48,7 @@ function roleBadgeVariant(role: Role): "default" | "secondary" | "outline" {
 export function Sidebar({ user }: { user: Session["user"] }) {
   const pathname = usePathname();
   const [briefStats, setBriefStats] = useState<BriefStats>({ active: 0 });
+  const [pwDialogOpen, setPwDialogOpen] = useState(false);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -135,8 +138,8 @@ export function Sidebar({ user }: { user: Session["user"] }) {
         })}
       </nav>
 
-      <div className="border-t p-3 space-y-3">
-        <div className="flex items-center gap-3 px-1">
+      <div className="border-t p-3 space-y-2">
+        <div className="flex items-center gap-3 px-1 pb-1">
           <div className="h-9 w-9 rounded-full bg-primary/10 text-primary flex items-center justify-center text-sm font-semibold shrink-0">
             {initialsFromName(user.name)}
           </div>
@@ -153,12 +156,23 @@ export function Sidebar({ user }: { user: Session["user"] }) {
           variant="ghost"
           size="sm"
           className="w-full justify-start"
+          onClick={() => setPwDialogOpen(true)}
+        >
+          <KeyRound className="size-3.5" />
+          Ganti Password
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="w-full justify-start"
           onClick={() => signOut({ callbackUrl: "/login" })}
         >
           <LogOut className="size-3.5" />
           Logout
         </Button>
       </div>
+
+      <ChangePasswordDialog open={pwDialogOpen} onOpenChange={setPwDialogOpen} />
     </aside>
   );
 }
