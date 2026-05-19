@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
+import { Role } from "@prisma/client";
+
 import { prisma } from "@/lib/prisma";
 import { createLogger } from "@/lib/logger";
+import { getSessionOrThrow, requireRole, handleAuthError } from "@/lib/auth-helpers";
 
 const log = createLogger({ module: "api/briefs/[id]/convert-to-campaign" });
 
@@ -9,6 +12,8 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const session = await getSessionOrThrow();
+    requireRole(session, [Role.ADMIN, Role.EDITOR]);
     const { id } = await params;
 
     const brief = await prisma.brief.findUnique({ where: { id } });
@@ -74,6 +79,8 @@ export async function POST(
       },
     });
   } catch (err) {
+    const authResp = handleAuthError(err);
+    if (authResp) return authResp;
     const msg = err instanceof Error ? err.message : String(err);
     log.error({ error: msg }, "Failed to convert brief to campaign");
     return NextResponse.json({ error: msg }, { status: 500 });

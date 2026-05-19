@@ -1,7 +1,17 @@
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, Role } from "@prisma/client";
 import { randomUUID } from "crypto";
+import bcrypt from "bcryptjs";
 
 const prisma = new PrismaClient();
+
+const SEED_USERS: Array<{ email: string; name: string; role: Role }> = [
+  { email: "salman@cautools.com", name: "Salman", role: Role.ADMIN },
+  { email: "juan@cautools.com", name: "Juan", role: Role.EDITOR },
+  { email: "irfan@cautools.com", name: "Irfan", role: Role.VIEWER },
+  { email: "aqza@cautools.com", name: "Aqza", role: Role.VIEWER },
+];
+
+const DEFAULT_PASSWORD = "gantibro123";
 
 // Helper: random int dalam range
 const rand = (min: number, max: number) =>
@@ -38,10 +48,26 @@ const SAMPLE_CAPTIONS = [
   "Hidup hemat anak kos part 7",
 ];
 
+async function seedUsers() {
+  const passwordHash = await bcrypt.hash(DEFAULT_PASSWORD, 10);
+
+  for (const u of SEED_USERS) {
+    await prisma.user.upsert({
+      where: { email: u.email },
+      update: { name: u.name, role: u.role },
+      create: { email: u.email, name: u.name, role: u.role, passwordHash },
+    });
+  }
+
+  console.log(`✅ Upserted ${SEED_USERS.length} users (default password: "${DEFAULT_PASSWORD}")`);
+}
+
 async function main() {
   console.log("🌱 Seeding...");
 
-  // Clear existing
+  await seedUsers();
+
+  // Clear existing video-related data (NOT users)
   await prisma.videoSnapshot.deleteMany();
   await prisma.recommendation.deleteMany();
   await prisma.scrapeJob.deleteMany();

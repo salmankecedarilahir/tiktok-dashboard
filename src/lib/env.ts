@@ -31,6 +31,7 @@ const envSchema = z.object({
   // Secrets
   CRON_SECRET: z.string().min(32, "CRON_SECRET must be at least 32 chars"),
   REFRESH_SECRET: z.string().min(32, "REFRESH_SECRET must be at least 32 chars"),
+  NEXTAUTH_SECRET: z.string().min(32, "NEXTAUTH_SECRET must be at least 32 chars"),
 
   // Sentry (optional)
   NEXT_PUBLIC_SENTRY_DSN: z.string().optional().default(""),

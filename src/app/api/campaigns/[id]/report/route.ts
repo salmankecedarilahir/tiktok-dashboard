@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { renderToStream } from "@react-pdf/renderer";
+import { Role } from "@prisma/client";
+
 import { prisma } from "@/lib/prisma";
 import { createLogger } from "@/lib/logger";
+import { getSessionOrThrow, requireRole, handleAuthError } from "@/lib/auth-helpers";
 import { CampaignReportPDF, CampaignReportData } from "@/components/pdf/CampaignReport";
 
 const log = createLogger({ module: "api/campaigns/[id]/report" });
@@ -11,6 +14,8 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const session = await getSessionOrThrow();
+    requireRole(session, [Role.ADMIN, Role.EDITOR]);
     const { id } = await params;
 
     const campaign = await prisma.campaign.findUnique({
@@ -144,6 +149,8 @@ export async function GET(
       },
     });
   } catch (err) {
+    const authResp = handleAuthError(err);
+    if (authResp) return authResp;
     const msg = err instanceof Error ? err.message : String(err);
     log.error({ error: msg }, "Failed to generate PDF");
     return NextResponse.json({ error: msg }, { status: 500 });

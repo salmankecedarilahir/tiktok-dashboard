@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { Role } from "@prisma/client";
 import { z } from "zod";
+
+import { prisma } from "@/lib/prisma";
 import { createLogger } from "@/lib/logger";
+import { getSessionOrThrow, requireRole, handleAuthError } from "@/lib/auth-helpers";
 
 const log = createLogger({ module: "api/campaigns" });
 
@@ -19,6 +22,7 @@ const campaignSchema = z.object({
 
 export async function GET() {
   try {
+    await getSessionOrThrow();
     const campaigns = await prisma.campaign.findMany({
       include: {
         _count: { select: { videos: true } },
@@ -41,6 +45,8 @@ export async function GET() {
       })),
     });
   } catch (err) {
+    const authResp = handleAuthError(err);
+    if (authResp) return authResp;
     const msg = err instanceof Error ? err.message : String(err);
     log.error({ error: msg }, "Failed to list campaigns");
     return NextResponse.json({ error: msg }, { status: 500 });
@@ -49,6 +55,8 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   try {
+    const session = await getSessionOrThrow();
+    requireRole(session, [Role.ADMIN, Role.EDITOR]);
     const body = await req.json();
     const parsed = campaignSchema.parse(body);
 
@@ -78,6 +86,8 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ success: true, campaign });
   } catch (err) {
+    const authResp = handleAuthError(err);
+    if (authResp) return authResp;
     if (err instanceof z.ZodError) {
       return NextResponse.json(
         { error: "Validation failed", details: err.issues },
