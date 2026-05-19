@@ -1,4 +1,4 @@
-import NextAuth from "next-auth";
+import NextAuth, { type Session } from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
 import { Role } from "@prisma/client";
@@ -66,10 +66,16 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       return token;
     },
     session({ session, token }) {
-      if (session.user) {
-        if (typeof token.id === "string") session.user.id = token.id;
-        if (token.role) session.user.role = token.role as Role;
+      // Defense terhadap token stale: kalau JWT lama (sebelum migration role)
+      // dipakai, token.id / token.role bisa undefined. Return session tanpa
+      // user supaya `auth()` & middleware (cek `!!auth?.user`) treat sebagai
+      // unauthenticated → redirect ke /login → user re-issue token segar.
+      if (typeof token.id !== "string" || !token.role) {
+        log.warn({ tokenSub: token.sub }, "session: token missing id/role — invalidating");
+        return { expires: session.expires } as unknown as Session;
       }
+      session.user.id = token.id;
+      session.user.role = token.role as Role;
       return session;
     },
   },

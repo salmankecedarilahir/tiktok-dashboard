@@ -2,14 +2,18 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Button } from "@/components/ui/button";
 import { RefreshCw } from "lucide-react";
 import { toast } from "sonner";
+import type { Role } from "@prisma/client";
 
-export function RefreshButton() {
+import { Button } from "@/components/ui/button";
+
+export function RefreshButton({ userRole }: { userRole: Role }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [isLoading, setIsLoading] = useState(false);
+
+  if (userRole === "VIEWER") return null;
 
   const handleRefresh = async () => {
     setIsLoading(true);
@@ -25,7 +29,6 @@ export function RefreshButton() {
         description: `${data.videosFound} videos, ${data.snapshotsAdded} snapshots`,
       });
 
-      // Trigger re-render of server components
       startTransition(() => {
         router.refresh();
       });

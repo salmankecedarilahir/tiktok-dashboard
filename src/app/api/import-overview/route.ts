@@ -7,6 +7,8 @@ import { getSessionOrThrow, requireRole, handleAuthError } from "@/lib/auth-help
 
 const log = createLogger({ module: "api/import-overview" });
 
+const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024; // 5 MB
+
 export async function POST(req: NextRequest) {
   try {
     const session = await getSessionOrThrow();
@@ -20,6 +22,15 @@ export async function POST(req: NextRequest) {
 
     if (!file.name.toLowerCase().endsWith(".csv")) {
       return NextResponse.json({ error: "File harus .csv" }, { status: 400 });
+    }
+
+    if (file.size > MAX_FILE_SIZE_BYTES) {
+      const limitMb = MAX_FILE_SIZE_BYTES / 1024 / 1024;
+      const actualMb = (file.size / 1024 / 1024).toFixed(2);
+      return NextResponse.json(
+        { error: `File terlalu besar (${actualMb} MB). Maksimal ${limitMb} MB.` },
+        { status: 413 }
+      );
     }
 
     const csvContent = await file.text();

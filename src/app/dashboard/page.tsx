@@ -1,4 +1,9 @@
 import { Suspense } from "react";
+import { Role } from "@prisma/client";
+import { formatDistanceToNow } from "date-fns";
+import { id as idLocale } from "date-fns/locale";
+
+import { auth } from "@/auth";
 import { getTopVideos } from "@/lib/ranking";
 import { getAllRecommendations } from "@/lib/recommendations";
 import { prisma } from "@/lib/prisma";
@@ -7,8 +12,6 @@ import { RecommendationCards } from "@/components/dashboard/recommendation-cards
 import { RefreshButton } from "@/components/dashboard/refresh-button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Separator } from "@/components/ui/separator";
-import { formatDistanceToNow } from "date-fns";
-import { id as idLocale } from "date-fns/locale";
 
 // Disable static optimization — selalu fresh data
 export const dynamic = "force-dynamic";
@@ -24,11 +27,14 @@ async function getLastScrape() {
 }
 
 export default async function DashboardPage() {
-  const [topVideos, recommendations, lastScrape] = await Promise.all([
+  const [session, topVideos, recommendations, lastScrape] = await Promise.all([
+    auth(),
     getTopVideos(10),
     getAllRecommendations(),
     getLastScrape(),
   ]);
+
+  const userRole: Role = session?.user?.role ?? Role.VIEWER;
 
   const lastUpdated = lastScrape
     ? formatDistanceToNow(lastScrape.startedAt, {
@@ -49,7 +55,7 @@ export default async function DashboardPage() {
             Top 10 video + insight rekomendasi
           </p>
         </div>
-        <RefreshButton />
+        <RefreshButton userRole={userRole} />
       </div>
 
       <p className="text-sm text-muted-foreground mb-6">

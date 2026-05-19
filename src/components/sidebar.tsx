@@ -48,14 +48,19 @@ export function Sidebar({ user }: { user: Session["user"] }) {
   const [briefStats, setBriefStats] = useState<BriefStats>({ active: 0 });
 
   useEffect(() => {
-    fetch("/api/briefs/stats")
+    const controller = new AbortController();
+    fetch("/api/briefs/stats", { signal: controller.signal })
       .then((r) => r.json())
       .then((d) => {
         if (d && typeof d.active === "number") {
           setBriefStats({ active: d.active });
         }
       })
-      .catch(() => {});
+      .catch((err: unknown) => {
+        // Silent: AbortError dari unmount/route-change atau network fail
+        if (err instanceof DOMException && err.name === "AbortError") return;
+      });
+    return () => controller.abort();
   }, [pathname]);
 
   const allNavItems: NavItem[] = [

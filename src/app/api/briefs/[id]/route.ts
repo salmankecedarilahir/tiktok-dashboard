@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { Role } from "@prisma/client";
+import { Prisma, Role } from "@prisma/client";
 import { z } from "zod";
 
 import { prisma } from "@/lib/prisma";
@@ -142,6 +142,9 @@ export async function PATCH(
   } catch (err) {
     const authResp = handleAuthError(err);
     if (authResp) return authResp;
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2025") {
+      return NextResponse.json({ error: "Brief not found" }, { status: 404 });
+    }
     if (err instanceof z.ZodError) {
       return NextResponse.json(
         { error: "Validation failed", details: err.issues },
@@ -168,6 +171,9 @@ export async function DELETE(
   } catch (err) {
     const authResp = handleAuthError(err);
     if (authResp) return authResp;
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2025") {
+      return NextResponse.json({ error: "Brief not found" }, { status: 404 });
+    }
     const msg = err instanceof Error ? err.message : String(err);
     log.error({ error: msg }, "Failed to delete brief");
     return NextResponse.json({ error: msg }, { status: 500 });
