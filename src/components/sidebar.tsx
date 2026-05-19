@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
+import { signOut } from "next-auth/react";
 import {
   LayoutDashboard,
   Megaphone,
@@ -10,7 +11,13 @@ import {
   Settings,
   Upload,
   Sparkles,
+  LogOut,
 } from "lucide-react";
+import type { Session } from "next-auth";
+import type { Role } from "@prisma/client";
+
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 
 interface BriefStats {
   active: number;
@@ -21,9 +28,22 @@ interface NavItem {
   href: string;
   icon: React.ElementType;
   badge?: number;
+  adminOnly?: boolean;
 }
 
-export function Sidebar() {
+function initialsFromName(name: string | null | undefined): string {
+  if (!name) return "?";
+  const parts = name.trim().split(/\s+/).slice(0, 2);
+  return parts.map((p) => p[0]?.toUpperCase() ?? "").join("") || "?";
+}
+
+function roleBadgeVariant(role: Role): "default" | "secondary" | "outline" {
+  if (role === "ADMIN") return "default";
+  if (role === "EDITOR") return "secondary";
+  return "outline";
+}
+
+export function Sidebar({ user }: { user: Session["user"] }) {
   const pathname = usePathname();
   const [briefStats, setBriefStats] = useState<BriefStats>({ active: 0 });
 
@@ -38,34 +58,22 @@ export function Sidebar() {
       .catch(() => {});
   }, [pathname]);
 
-  const navItems: NavItem[] = [
-    {
-      label: "Overview",
-      href: "/dashboard",
-      icon: LayoutDashboard,
-    },
+  const allNavItems: NavItem[] = [
+    { label: "Overview", href: "/dashboard", icon: LayoutDashboard },
     {
       label: "Briefs",
       href: "/dashboard/briefs",
       icon: Inbox,
       badge: briefStats.active > 0 ? briefStats.active : undefined,
     },
-    {
-      label: "Campaigns",
-      href: "/dashboard/campaigns",
-      icon: Megaphone,
-    },
-    {
-      label: "Channel",
-      href: "/dashboard/channel",
-      icon: Settings,
-    },
-    {
-      label: "Import",
-      href: "/dashboard/import",
-      icon: Upload,
-    },
+    { label: "Campaigns", href: "/dashboard/campaigns", icon: Megaphone },
+    { label: "Channel", href: "/dashboard/channel", icon: Settings, adminOnly: true },
+    { label: "Import", href: "/dashboard/import", icon: Upload, adminOnly: true },
   ];
+
+  const navItems = allNavItems.filter(
+    (item) => !item.adminOnly || user.role === "ADMIN"
+  );
 
   function isActive(href: string): boolean {
     if (href === "/dashboard") return pathname === "/dashboard";
@@ -122,13 +130,29 @@ export function Sidebar() {
         })}
       </nav>
 
-      <div className="p-4 border-t">
-        <div className="text-xs text-muted-foreground">
-          Circle Anak UPN
+      <div className="border-t p-3 space-y-3">
+        <div className="flex items-center gap-3 px-1">
+          <div className="h-9 w-9 rounded-full bg-primary/10 text-primary flex items-center justify-center text-sm font-semibold shrink-0">
+            {initialsFromName(user.name)}
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="text-sm font-medium truncate">{user.name ?? "User"}</div>
+            <div className="mt-0.5">
+              <Badge variant={roleBadgeVariant(user.role)} className="text-[10px]">
+                {user.role}
+              </Badge>
+            </div>
+          </div>
         </div>
-        <div className="text-xs text-muted-foreground/60">
-          @abangabanganthis
-        </div>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="w-full justify-start"
+          onClick={() => signOut({ callbackUrl: "/login" })}
+        >
+          <LogOut className="size-3.5" />
+          Logout
+        </Button>
       </div>
     </aside>
   );

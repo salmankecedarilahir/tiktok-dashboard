@@ -3,6 +3,7 @@
 import { useEffect, useState, use } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { useSession } from "next-auth/react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -77,6 +78,8 @@ export default function BriefDetailPage({
 }) {
   const { id } = use(params);
   const router = useRouter();
+  const { data: session } = useSession();
+  const canEdit = session?.user?.role !== "VIEWER";
   const [brief, setBrief] = useState<BriefDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -256,15 +259,18 @@ export default function BriefDetailPage({
                   </Button>
                 </Link>
               )}
-              <Button onClick={handleSave} disabled={saving} size="sm">
-                <Save className="mr-2 h-4 w-4" />
-                {saving ? "Saving..." : "Save Changes"}
-              </Button>
+              {canEdit && (
+                <Button onClick={handleSave} disabled={saving} size="sm">
+                  <Save className="mr-2 h-4 w-4" />
+                  {saving ? "Saving..." : "Save Changes"}
+                </Button>
+              )}
             </div>
           </div>
         </CardHeader>
       </Card>
 
+      <fieldset disabled={!canEdit} className="contents disabled:opacity-90">
       {/* Status Section */}
       <Card className="mb-6">
         <CardHeader>
@@ -465,9 +471,10 @@ export default function BriefDetailPage({
           </div>
         </CardContent>
       </Card>
+      </fieldset>
 
       {/* Generate Proposal PDF */}
-      {form.status === "CONFIRMED" && form.campaignName && form.startDate && form.endDate ? (
+      {canEdit && form.status === "CONFIRMED" && form.campaignName && form.startDate && form.endDate ? (
         <Card className="mb-6 border-primary/30">
           <CardHeader>
             <CardTitle className="text-lg flex items-center gap-2">
@@ -493,7 +500,7 @@ export default function BriefDetailPage({
       ) : null}
 
       {/* Convert to Campaign */}
-      {!brief.campaignId && (
+      {canEdit && !brief.campaignId && (
         <Card className="border-primary/50">
           <CardHeader>
             <CardTitle className="text-lg flex items-center gap-2">

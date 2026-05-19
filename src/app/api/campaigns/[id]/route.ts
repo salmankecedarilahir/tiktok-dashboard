@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
+import { Role } from "@prisma/client";
+
 import { prisma } from "@/lib/prisma";
 import { createLogger } from "@/lib/logger";
+import { getSessionOrThrow, requireRole, handleAuthError } from "@/lib/auth-helpers";
 
 const log = createLogger({ module: "api/campaigns/[id]" });
 
@@ -9,6 +12,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    await getSessionOrThrow();
     const { id } = await params;
 
     const campaign = await prisma.campaign.findUnique({
@@ -47,6 +51,8 @@ export async function GET(
       },
     });
   } catch (err) {
+    const authResp = handleAuthError(err);
+    if (authResp) return authResp;
     const msg = err instanceof Error ? err.message : String(err);
     log.error({ error: msg }, "Failed to get campaign");
     return NextResponse.json({ error: msg }, { status: 500 });
@@ -58,6 +64,8 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const session = await getSessionOrThrow();
+    requireRole(session, [Role.ADMIN, Role.EDITOR]);
     const { id } = await params;
 
     await prisma.campaign.delete({ where: { id } });
@@ -66,6 +74,8 @@ export async function DELETE(
 
     return NextResponse.json({ success: true });
   } catch (err) {
+    const authResp = handleAuthError(err);
+    if (authResp) return authResp;
     const msg = err instanceof Error ? err.message : String(err);
     log.error({ error: msg }, "Failed to delete campaign");
     return NextResponse.json({ error: msg }, { status: 500 });

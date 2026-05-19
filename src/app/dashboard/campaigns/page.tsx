@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useSession } from "next-auth/react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -22,6 +23,8 @@ interface Campaign {
 }
 
 export default function CampaignsPage() {
+  const { data: session } = useSession();
+  const canEdit = session?.user?.role !== "VIEWER";
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState<string | null>(null);
@@ -79,12 +82,14 @@ export default function CampaignsPage() {
             Manage brand campaigns dan generate performance reports.
           </p>
         </div>
-        <Link href="/dashboard/campaigns/new">
-          <Button>
-            <Plus className="mr-2 h-4 w-4" />
-            New Campaign
-          </Button>
-        </Link>
+        {canEdit && (
+          <Link href="/dashboard/campaigns/new">
+            <Button>
+              <Plus className="mr-2 h-4 w-4" />
+              New Campaign
+            </Button>
+          </Link>
+        )}
       </div>
 
       {loading ? (
@@ -95,12 +100,14 @@ export default function CampaignsPage() {
             <p className="text-muted-foreground mb-4">
               Belum ada campaign. Buat campaign pertama untuk brand client lo.
             </p>
-            <Link href="/dashboard/campaigns/new">
-              <Button>
-                <Plus className="mr-2 h-4 w-4" />
-                Create First Campaign
-              </Button>
-            </Link>
+            {canEdit && (
+              <Link href="/dashboard/campaigns/new">
+                <Button>
+                  <Plus className="mr-2 h-4 w-4" />
+                  Create First Campaign
+                </Button>
+              </Link>
+            )}
           </CardContent>
         </Card>
       ) : (
@@ -124,15 +131,17 @@ export default function CampaignsPage() {
                         <ExternalLink className="h-4 w-4" />
                       </Button>
                     </Link>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleDelete(c.id, c.brandName)}
-                      disabled={deleting === c.id}
-                      className="text-red-600 hover:text-red-700"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
+                    {canEdit && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleDelete(c.id, c.brandName)}
+                        disabled={deleting === c.id}
+                        className="text-red-600 hover:text-red-700"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    )}
                   </div>
                 </div>
               </CardHeader>

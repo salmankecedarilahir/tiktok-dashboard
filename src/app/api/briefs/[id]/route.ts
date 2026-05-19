@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { Role } from "@prisma/client";
 import { z } from "zod";
+
+import { prisma } from "@/lib/prisma";
 import { createLogger } from "@/lib/logger";
+import { getSessionOrThrow, requireRole, handleAuthError } from "@/lib/auth-helpers";
 
 const log = createLogger({ module: "api/briefs/[id]" });
 
@@ -43,6 +46,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    await getSessionOrThrow();
     const { id } = await params;
 
     const brief = await prisma.brief.findUnique({
@@ -76,6 +80,8 @@ export async function GET(
       },
     });
   } catch (err) {
+    const authResp = handleAuthError(err);
+    if (authResp) return authResp;
     const msg = err instanceof Error ? err.message : String(err);
     log.error({ error: msg }, "Failed to get brief");
     return NextResponse.json({ error: msg }, { status: 500 });
@@ -87,6 +93,8 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const session = await getSessionOrThrow();
+    requireRole(session, [Role.ADMIN, Role.EDITOR]);
     const { id } = await params;
     const body = await req.json();
     const parsed = patchSchema.parse(body);
@@ -132,6 +140,8 @@ export async function PATCH(
       },
     });
   } catch (err) {
+    const authResp = handleAuthError(err);
+    if (authResp) return authResp;
     if (err instanceof z.ZodError) {
       return NextResponse.json(
         { error: "Validation failed", details: err.issues },
@@ -149,11 +159,15 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const session = await getSessionOrThrow();
+    requireRole(session, [Role.ADMIN, Role.EDITOR]);
     const { id } = await params;
     await prisma.brief.delete({ where: { id } });
     log.info({ id }, "Deleted brief");
     return NextResponse.json({ success: true });
   } catch (err) {
+    const authResp = handleAuthError(err);
+    if (authResp) return authResp;
     const msg = err instanceof Error ? err.message : String(err);
     log.error({ error: msg }, "Failed to delete brief");
     return NextResponse.json({ error: msg }, { status: 500 });

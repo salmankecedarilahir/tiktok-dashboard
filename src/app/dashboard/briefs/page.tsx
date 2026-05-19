@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useSession } from "next-auth/react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -53,6 +54,8 @@ const STATUS_CONFIG: Record<BriefStatus, { label: string; color: string; icon: R
 const STATUS_ORDER: BriefStatus[] = ["INQUIRY", "NEGOTIATING", "CONFIRMED", "ACTIVE", "DONE", "ARCHIVED"];
 
 export default function BriefsPage() {
+  const { data: session } = useSession();
+  const canEdit = session?.user?.role !== "VIEWER";
   const [briefs, setBriefs] = useState<Brief[]>([]);
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState<string | null>(null);
@@ -121,12 +124,14 @@ export default function BriefsPage() {
             Track brand inquiry hingga campaign delivery. {totalActive} active deal{totalActive !== 1 ? "s" : ""}.
           </p>
         </div>
-        <Link href="/dashboard/briefs/new">
-          <Button>
-            <Plus className="mr-2 h-4 w-4" />
-            New Brief
-          </Button>
-        </Link>
+        {canEdit && (
+          <Link href="/dashboard/briefs/new">
+            <Button>
+              <Plus className="mr-2 h-4 w-4" />
+              New Brief
+            </Button>
+          </Link>
+        )}
       </div>
 
       {loading ? (
@@ -138,12 +143,14 @@ export default function BriefsPage() {
             <p className="text-muted-foreground mb-4">
               Belum ada brief. Mulai track brand inquiry pertama lo.
             </p>
-            <Link href="/dashboard/briefs/new">
-              <Button>
-                <Plus className="mr-2 h-4 w-4" />
-                Create First Brief
-              </Button>
-            </Link>
+            {canEdit && (
+              <Link href="/dashboard/briefs/new">
+                <Button>
+                  <Plus className="mr-2 h-4 w-4" />
+                  Create First Brief
+                </Button>
+              </Link>
+            )}
           </CardContent>
         </Card>
       ) : (
@@ -196,15 +203,17 @@ export default function BriefsPage() {
                                 <ExternalLink className="h-4 w-4" />
                               </Button>
                             </Link>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleDelete(b.id, b.brandName)}
-                              disabled={deleting === b.id}
-                              className="text-red-600 hover:text-red-700"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
+                            {canEdit && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleDelete(b.id, b.brandName)}
+                                disabled={deleting === b.id}
+                                className="text-red-600 hover:text-red-700"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            )}
                           </div>
                         </div>
                       </CardHeader>

@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { Role } from "@prisma/client";
 import { z } from "zod";
+
+import { prisma } from "@/lib/prisma";
 import { createLogger } from "@/lib/logger";
+import { getSessionOrThrow, requireRole, handleAuthError } from "@/lib/auth-helpers";
 
 const log = createLogger({ module: "api/channel-config" });
 
@@ -26,6 +29,8 @@ const configSchema = z.object({
 
 export async function GET() {
   try {
+    const session = await getSessionOrThrow();
+    requireRole(session, [Role.ADMIN]);
     // ChannelConfig is singleton (1 row only for CAU)
     const config = await prisma.channelConfig.findFirst({
       orderBy: { updatedAt: "desc" },
@@ -33,6 +38,8 @@ export async function GET() {
 
     return NextResponse.json({ config });
   } catch (err) {
+    const authResp = handleAuthError(err);
+    if (authResp) return authResp;
     const msg = err instanceof Error ? err.message : String(err);
     log.error({ error: msg }, "Failed to fetch config");
     return NextResponse.json({ error: msg }, { status: 500 });
@@ -41,6 +48,8 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   try {
+    const session = await getSessionOrThrow();
+    requireRole(session, [Role.ADMIN]);
     const body = await req.json();
     const parsed = configSchema.parse(body);
 
@@ -64,6 +73,8 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ success: true, config });
   } catch (err) {
+    const authResp = handleAuthError(err);
+    if (authResp) return authResp;
     if (err instanceof z.ZodError) {
       return NextResponse.json(
         { error: "Validation failed", details: err.issues },

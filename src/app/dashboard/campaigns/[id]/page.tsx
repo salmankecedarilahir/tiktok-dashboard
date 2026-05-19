@@ -2,6 +2,7 @@
 
 import { useEffect, useState, use } from "react";
 import Link from "next/link";
+import { useSession } from "next-auth/react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -63,6 +64,8 @@ export default function CampaignDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = use(params);
+  const { data: session } = useSession();
+  const canEdit = session?.user?.role !== "VIEWER";
   const [campaign, setCampaign] = useState<CampaignDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -264,7 +267,7 @@ export default function CampaignDetailPage({
                 {campaign.campaignName}
               </CardDescription>
             </div>
-            {campaign.videos.length > 0 && (
+            {canEdit && campaign.videos.length > 0 && (
               <a href={reportUrl} target="_blank" rel="noopener">
                 <Button>
                   <FileText className="mr-2 h-4 w-4" />
@@ -316,7 +319,7 @@ export default function CampaignDetailPage({
               <CardTitle>Videos</CardTitle>
               <CardDescription>Manual input metrics dari TikTok Studio per video.</CardDescription>
             </div>
-            {!showForm && (
+            {canEdit && !showForm && (
               <Button onClick={() => setShowForm(true)} size="sm">
                 <Plus className="mr-2 h-4 w-4" />
                 Add Video
@@ -360,7 +363,9 @@ export default function CampaignDetailPage({
           {campaign.videos.length === 0 ? (
             <div className="py-8 text-center text-muted-foreground">
               <p>Belum ada video di campaign ini.</p>
-              <p className="text-sm mt-2">Klik Add Video untuk mulai input metrics.</p>
+              {canEdit && (
+                <p className="text-sm mt-2">Klik Add Video untuk mulai input metrics.</p>
+              )}
             </div>
           ) : (
             <div className="space-y-3">
@@ -383,9 +388,11 @@ export default function CampaignDetailPage({
                             <Button variant="ghost" size="sm"><ExternalLink className="h-4 w-4" /></Button>
                           </a>
                         )}
-                        <Button variant="ghost" size="sm" onClick={() => handleDeleteVideo(v.id, v.videoTitle)} disabled={deletingId === v.id} className="text-red-600 hover:text-red-700">
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
+                        {canEdit && (
+                          <Button variant="ghost" size="sm" onClick={() => handleDeleteVideo(v.id, v.videoTitle)} disabled={deletingId === v.id} className="text-red-600 hover:text-red-700">
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        )}
                       </div>
                     </div>
                     <div className="grid grid-cols-2 md:grid-cols-6 gap-2 text-sm">

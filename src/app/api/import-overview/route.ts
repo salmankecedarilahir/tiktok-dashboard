@@ -1,11 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
+import { Role } from "@prisma/client";
+
 import { parseOverviewCsv, importDailyMetrics } from "@/lib/csv-overview-import";
 import { createLogger } from "@/lib/logger";
+import { getSessionOrThrow, requireRole, handleAuthError } from "@/lib/auth-helpers";
 
 const log = createLogger({ module: "api/import-overview" });
 
 export async function POST(req: NextRequest) {
   try {
+    const session = await getSessionOrThrow();
+    requireRole(session, [Role.ADMIN]);
     const formData = await req.formData();
     const file = formData.get("file") as File | null;
 
@@ -39,6 +44,8 @@ export async function POST(req: NextRequest) {
       },
     });
   } catch (err) {
+    const authResp = handleAuthError(err);
+    if (authResp) return authResp;
     const msg = err instanceof Error ? err.message : String(err);
     log.error({ error: msg }, "Import failed");
     return NextResponse.json({ error: msg }, { status: 500 });

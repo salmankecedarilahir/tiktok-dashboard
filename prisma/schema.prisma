@@ -171,6 +171,24 @@ enum BriefStatus {
   ARCHIVED
 }
 
+enum Role {
+  ADMIN
+  EDITOR
+  VIEWER
+}
+
+/// Internal user account untuk akses dashboard.
+model User {
+  id           String   @id @default(uuid()) @db.Uuid
+  email        String   @unique
+  name         String
+  passwordHash String   @map("password_hash")
+  role         Role     @default(VIEWER)
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@map("users")
+}
+
 model Brief {
   id              String      @id @default(uuid()) @db.Uuid
   brandName       String
