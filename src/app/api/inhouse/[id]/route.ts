@@ -113,11 +113,14 @@ export async function DELETE(
   } catch (err) {
     const authResp = handleAuthError(err);
     if (authResp) return authResp;
+    // DELETE idempotent: kalau record sudah tidak ada (mis. user double-click
+    // atau dihapus di tab lain), anggap sukses biar UX nggak nampilin error.
     if (
       err instanceof Prisma.PrismaClientKnownRequestError &&
       err.code === "P2025"
     ) {
-      return NextResponse.json({ error: "Video not found" }, { status: 404 });
+      log.info("Inhouse video already deleted, treating as success");
+      return NextResponse.json({ success: true, alreadyDeleted: true });
     }
     const msg = err instanceof Error ? err.message : String(err);
     log.error({ error: msg }, "Failed to delete inhouse video");
