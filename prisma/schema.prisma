@@ -189,6 +189,53 @@ model User {
   @@map("users")
 }
 
+/// Weekly report container untuk inhouse video tracking.
+/// Auto-create lewat POST /api/inhouse jika belum ada untuk week/month/year.
+model InhouseWeeklyReport {
+  id           String   @id @default(uuid()) @db.Uuid
+  weekNumber   Int      @map("week_number")
+  month        Int
+  year         Int
+  weekSummary  String?  @map("week_summary") @db.Text
+  generatedAt  DateTime? @map("generated_at")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  videos InhouseVideo[]
+
+  @@unique([weekNumber, month, year])
+  @@index([year, month, weekNumber])
+  @@map("inhouse_weekly_reports")
+}
+
+/// Video TikTok produksi sendiri (bukan brand campaign).
+/// Metrik diinput manual dari TikTok Studio.
+model InhouseVideo {
+  id             String   @id @default(uuid()) @db.Uuid
+  tiktokUrl      String   @map("tiktok_url")
+  tiktokVideoId  String   @map("tiktok_video_id")
+  caption        String?  @db.Text
+  weekNumber     Int      @map("week_number")
+  month          Int
+  year           Int
+  views          BigInt   @default(0)
+  likes          BigInt   @default(0)
+  comments       BigInt   @default(0)
+  shares         BigInt   @default(0)
+  evaluation     String?  @db.Text
+  postedAt       DateTime? @map("posted_at")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  weeklyReportId String?              @map("weekly_report_id") @db.Uuid
+  weeklyReport   InhouseWeeklyReport? @relation(fields: [weeklyReportId], references: [id], onDelete: SetNull)
+
+  @@unique([tiktokVideoId, weekNumber, month, year])
+  @@index([year, month, weekNumber])
+  @@index([weeklyReportId])
+  @@map("inhouse_videos")
+}
+
 model Brief {
   id              String      @id @default(uuid()) @db.Uuid
   brandName       String
