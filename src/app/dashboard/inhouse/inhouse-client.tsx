@@ -154,10 +154,13 @@ export function InhouseClient({
   }
 
   async function confirmDelete() {
-    if (!deleteTarget) return;
+    // Re-entrance guard: cegah double-fire (mis. user double-click "Hapus"
+    // sebelum React sempat update disabled state).
+    if (!deleteTarget || deleting) return;
+    const targetId = deleteTarget.id;
     setDeleting(true);
     try {
-      const res = await fetch(`/api/inhouse/${deleteTarget.id}`, {
+      const res = await fetch(`/api/inhouse/${targetId}`, {
         method: "DELETE",
       });
       const json = await res.json().catch(() => ({}));
