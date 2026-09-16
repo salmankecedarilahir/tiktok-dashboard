@@ -14,6 +14,7 @@ import {
   LogOut,
   KeyRound,
   BarChart2,
+  Calculator,
 } from "lucide-react";
 import type { Session } from "next-auth";
 import type { Role } from "@prisma/client";
@@ -77,6 +78,11 @@ export function Sidebar({ user }: { user: Session["user"] }) {
     },
     { label: "Campaigns", href: "/dashboard/campaigns", icon: Megaphone },
     { label: "Inhouse", href: "/dashboard/inhouse", icon: BarChart2 },
+    {
+      label: "Contribution Plan",
+      href: "/dashboard/inhouse/contributions",
+      icon: Calculator,
+    },
     { label: "Channel", href: "/dashboard/channel", icon: Settings, adminOnly: true },
     { label: "Import", href: "/dashboard/import", icon: Upload, adminOnly: true },
   ];
@@ -87,6 +93,7 @@ export function Sidebar({ user }: { user: Session["user"] }) {
 
   function isActive(href: string): boolean {
     if (href === "/dashboard") return pathname === "/dashboard";
+    if (href === "/dashboard/inhouse") return pathname === "/dashboard/inhouse";
     return pathname === href || pathname.startsWith(href + "/");
   }
 
