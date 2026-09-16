@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { getWeekDateRange } from "@/lib/utils";
 
+import { InhouseNavTabs } from "@/components/dashboard/inhouse-nav-tabs";
 import { InhouseMonthSelector } from "@/components/dashboard/inhouse-month-selector";
 import {
   InhouseSummaryCard,
@@ -185,6 +186,8 @@ export function InhouseClient({
           Tracker performa konten TikTok produksi sendiri, diorganisir per week.
         </p>
       </div>
+
+      <InhouseNavTabs />
 
       <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
         <InhouseMonthSelector

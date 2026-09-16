@@ -186,6 +186,8 @@ model User {
   role         Role     @default(VIEWER)
   createdAt    DateTime @default(now()) @map("created_at")
 
+  contributionMembers ContributionPlanMember[]
+
   @@map("users")
 }
 
@@ -268,3 +270,59 @@ model Brief {
   @@index([createdAt])
   @@map("briefs")
 }
+
+/// Contribution Plan untuk pembagian fee brand di bawah Inhouse
+model ContributionPlan {
+  id          String   @id @default(uuid()) @db.Uuid
+  title       String
+  brandName   String?  @map("brand_name")
+  totalAmount BigInt   @default(0) @map("total_amount")
+  objective   String?  @db.Text
+  planType    String?  @map("plan_type")
+  howTo       String?  @map("how_to")
+  notes       String?  @db.Text
+  date        DateTime @default(now())
+  status      String   @default("ACTIVE") // 'DRAFT' | 'ACTIVE' | 'ARCHIVED'
+
+  members ContributionPlanMember[]
+  tasks   ContributionTask[]
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([createdAt(sort: Desc)])
+  @@map("contribution_plans")
+}
+
+model ContributionPlanMember {
+  id     String  @id @default(uuid()) @db.Uuid
+  planId String  @map("plan_id") @db.Uuid
+  userId String? @map("user_id") @db.Uuid
+  name   String
+  role   String?
+
+  plan ContributionPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+  user User?            @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([planId])
+  @@index([userId])
+  @@map("contribution_plan_members")
+}
+
+model ContributionTask {
+  id          String   @id @default(uuid()) @db.Uuid
+  planId      String   @map("plan_id") @db.Uuid
+  orderNumber Int      @map("order_number")
+  title       String
+  weight      Float
+  details     String?  @db.Text
+  isAllTeam   Boolean  @default(false) @map("is_all_team")
+  assignees   String[] @default([])
+  notes       String?  @db.Text
+
+  plan ContributionPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  @@index([planId])
+  @@map("contribution_tasks")
+}
+
