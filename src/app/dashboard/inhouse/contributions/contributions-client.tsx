@@ -231,7 +231,16 @@ export function ContributionsClient() {
                       <div className="flex items-center gap-2">
                         <h3 className="font-semibold text-base">{p.title}</h3>
                         {p.status && (
-                          <Badge variant="outline" className="text-[10px]">
+                          <Badge
+                            variant="outline"
+                            className={
+                              p.status === "DRAFT"
+                                ? "border-amber-400 bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300 text-[10px] font-semibold"
+                                : p.status === "ACTIVE"
+                                ? "border-emerald-400 bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 text-[10px] font-semibold"
+                                : "text-[10px]"
+                            }
+                          >
                             {p.status}
                           </Badge>
                         )}
@@ -413,7 +422,7 @@ export function ContributionsClient() {
           <AlertDialogHeader>
             <AlertDialogTitle>Hapus Contribution Plan?</AlertDialogTitle>
             <AlertDialogDescription>
-              Plan "{deleteTarget?.title}" akan dihapus permanen. Aksi ini tidak dapat
+              Plan &quot;{deleteTarget?.title}&quot; akan dihapus permanen. Aksi ini tidak dapat
               dibatalkan.
             </AlertDialogDescription>
           </AlertDialogHeader>

@@ -193,7 +193,7 @@ export default function BriefDetailPage({
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Convert failed");
 
-      toast.success("Brief converted to Campaign");
+      toast.success("Brief di-convert ke Campaign & Draft Contribution Plan berhasil dibuat!");
       router.push("/dashboard/campaigns/" + data.campaign.id);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Convert failed");

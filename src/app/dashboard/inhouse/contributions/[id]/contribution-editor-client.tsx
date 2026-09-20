@@ -91,6 +91,7 @@ export function ContributionEditorClient({ planId }: { planId: string }) {
   const [planType, setPlanType] = useState("");
   const [howTo, setHowTo] = useState("");
   const [notes, setNotes] = useState("");
+  const [status, setStatus] = useState<string>("ACTIVE");
   const [members, setMembers] = useState<PlanMember[]>([]);
   const [tasks, setTasks] = useState<PlanTask[]>([]);
 
@@ -123,6 +124,7 @@ export function ContributionEditorClient({ planId }: { planId: string }) {
       setPlanType(p.planType || "");
       setHowTo(p.howTo || "");
       setNotes(p.notes || "");
+      setStatus(p.status || "ACTIVE");
       setMembers(p.members || []);
       setTasks(p.tasks || []);
     } catch (err) {
@@ -290,7 +292,8 @@ export function ContributionEditorClient({ planId }: { planId: string }) {
     toast.success("Tahapan kerja di-reset ke template standar");
   }
 
-  async function handleSave() {
+  async function handleSave(newStatus?: string) {
+    const targetStatus = newStatus || status;
     setSaving(true);
     try {
       const res = await fetch(`/api/inhouse/contributions/${planId}`, {
@@ -304,6 +307,7 @@ export function ContributionEditorClient({ planId }: { planId: string }) {
           planType,
           howTo,
           notes,
+          status: targetStatus,
           members,
           tasks,
         }),
@@ -312,7 +316,8 @@ export function ContributionEditorClient({ planId }: { planId: string }) {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Gagal menyimpan perubahan");
 
-      toast.success("Contribution plan berhasil disimpan");
+      if (newStatus) setStatus(newStatus);
+      toast.success(newStatus === "ACTIVE" ? "Contribution plan diaktifkan!" : "Contribution plan berhasil disimpan");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Gagal menyimpan");
     } finally {
@@ -335,6 +340,7 @@ export function ContributionEditorClient({ planId }: { planId: string }) {
           planType,
           howTo,
           notes,
+          status,
           members,
           tasks,
         }),
@@ -385,14 +391,40 @@ export function ContributionEditorClient({ planId }: { planId: string }) {
             </Link>
           </Button>
           <div>
-            <h1 className="text-xl font-bold">{title || "Contribution Plan"}</h1>
-            <p className="text-xs text-muted-foreground">
+            <div className="flex items-center gap-2">
+              <h1 className="text-xl font-bold">{title || "Contribution Plan"}</h1>
+              <Badge
+                variant="outline"
+                className={
+                  status === "DRAFT"
+                    ? "border-amber-400 bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300 text-xs font-semibold"
+                    : status === "ACTIVE"
+                    ? "border-emerald-400 bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 text-xs font-semibold"
+                    : "text-xs"
+                }
+              >
+                {status}
+              </Badge>
+            </div>
+            <p className="text-xs text-muted-foreground mt-0.5">
               Sesuaikan bobot job, tentukan PIC kontributor, dan hitung pembagian fee.
             </p>
           </div>
         </div>
 
         <div className="flex items-center gap-2">
+          {status === "DRAFT" && (
+            <Button
+              variant="default"
+              size="sm"
+              onClick={() => handleSave("ACTIVE")}
+              disabled={saving || exportingPdf}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5"
+            >
+              <CheckCircle className="h-4 w-4" />
+              Aktifkan Plan
+            </Button>
+          )}
           <Button
             variant="outline"
             onClick={handleExportPdf}
@@ -407,7 +439,7 @@ export function ContributionEditorClient({ planId }: { planId: string }) {
             Export PDF
           </Button>
           <Button
-            onClick={handleSave}
+            onClick={() => handleSave()}
             disabled={saving || exportingPdf}
             className="gap-1.5"
           >
@@ -518,7 +550,7 @@ export function ContributionEditorClient({ planId }: { planId: string }) {
           <div className="flex flex-wrap gap-2">
             {members.length === 0 ? (
               <p className="text-xs text-muted-foreground italic">
-                Belum ada kontributor dipilih. Klik "Tambah Kontributor" di atas.
+                Belum ada kontributor dipilih. Klik &quot;Tambah Kontributor&quot; di atas.
               </p>
             ) : (
               members.map((m) => (
@@ -838,6 +870,18 @@ export function ContributionEditorClient({ planId }: { planId: string }) {
         </Button>
 
         <div className="flex items-center gap-2">
+          {status === "DRAFT" && (
+            <Button
+              variant="default"
+              size="sm"
+              onClick={() => handleSave("ACTIVE")}
+              disabled={saving || exportingPdf}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5"
+            >
+              <CheckCircle className="h-4 w-4" />
+              Aktifkan Plan
+            </Button>
+          )}
           <Button
             variant="outline"
             onClick={handleExportPdf}
@@ -852,7 +896,7 @@ export function ContributionEditorClient({ planId }: { planId: string }) {
             Export PDF
           </Button>
           <Button
-            onClick={handleSave}
+            onClick={() => handleSave()}
             disabled={saving || exportingPdf}
             className="gap-1.5"
           >
