@@ -47,6 +47,10 @@ export async function GET(
       }))
     );
 
+    const channelConfig = await prisma.channelConfig.findFirst({
+      orderBy: { updatedAt: "desc" },
+    });
+
     const pdfData: ContributionPlanReportData = {
       title: plan.title,
       brandName: plan.brandName,
@@ -56,6 +60,11 @@ export async function GET(
       howTo: plan.howTo,
       notes: plan.notes,
       date: plan.date ? plan.date.toISOString() : new Date().toISOString(),
+      status: plan.status || "ACTIVE",
+      channelConfig: {
+        channelName: channelConfig?.channelName || "Circle Anak UPN",
+        channelHandle: channelConfig?.channelHandle || "@abangabanganthis",
+      },
       members: plan.members.map((m) => ({
         name: m.name,
         role: m.role,
