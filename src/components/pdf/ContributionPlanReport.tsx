@@ -38,14 +38,28 @@ export interface ContributionPlanReportData {
     assignees: string[];
     notes?: string | null;
   }>;
+  productionCosts?: Array<{
+    notes?: string | null;
+    totalAmount: number;
+    splits: Array<{
+      memberName: string;
+      amount: number;
+      notes?: string;
+    }>;
+  }>;
   calculation: {
+    totalProductionCost?: number;
+    netBrandAmount?: number;
     totalAllocatedPercentage: number;
     totalAllocatedAmount: number;
     unallocatedPercentage: number;
     unallocatedAmount: number;
+    totalDistributedAmount?: number;
     memberResults: Array<{
       name: string;
       percentage: number;
+      feeFromPercentage?: number;
+      productionCost?: number;
       amount: number;
     }>;
   };
@@ -573,13 +587,18 @@ export function ContributionPlanReportPDF({
               <Text style={styles.heroStatTag}>
                 {data.calculation.totalAllocatedPercentage}% Terdistribusi
               </Text>
+              {(data.calculation.totalProductionCost || 0) > 0 && (
+                <Text style={{ fontSize: 9, color: COLORS.white, opacity: 0.9, marginTop: 4 }}>
+                  Biaya Produksi: -{formatRupiah(data.calculation.totalProductionCost || 0)}
+                </Text>
+              )}
             </View>
           </View>
 
           {/* 4 Stat Cards */}
           <View style={styles.statGrid}>
             <View style={styles.statBox}>
-              <Text style={styles.statLabel}>Total Dialokasikan</Text>
+              <Text style={styles.statLabel}>Fee Dialokasikan</Text>
               <Text style={styles.statValue}>
                 {formatRupiah(data.calculation.totalAllocatedAmount)}
               </Text>
@@ -591,12 +610,31 @@ export function ContributionPlanReportPDF({
               </Text>
             </View>
             <View style={styles.statBox}>
-              <Text style={styles.statLabel}>Kontributor</Text>
-              <Text style={styles.statValue}>{data.members.length} Orang</Text>
+              <Text style={styles.statLabel}>
+                {(data.calculation.totalProductionCost || 0) > 0
+                  ? "Biaya Produksi"
+                  : "Kontributor"}
+              </Text>
+              <Text style={styles.statValue}>
+                {(data.calculation.totalProductionCost || 0) > 0
+                  ? formatRupiah(data.calculation.totalProductionCost || 0)
+                  : `${data.members.length} Orang`}
+              </Text>
             </View>
             <View style={styles.statBox}>
-              <Text style={styles.statLabel}>Tahapan Kerja</Text>
-              <Text style={styles.statValue}>{data.tasks.length} Tahap</Text>
+              <Text style={styles.statLabel}>
+                {(data.calculation.totalProductionCost || 0) > 0
+                  ? "Sisa Brand Bersih"
+                  : "Tahapan Kerja"}
+              </Text>
+              <Text style={styles.statValue}>
+                {(data.calculation.totalProductionCost || 0) > 0
+                  ? formatRupiah(
+                      data.calculation.netBrandAmount ??
+                        data.totalAmount - (data.calculation.totalProductionCost || 0)
+                    )
+                  : `${data.tasks.length} Tahap`}
+              </Text>
             </View>
           </View>
         </View>
@@ -631,6 +669,93 @@ export function ContributionPlanReportPDF({
           </View>
         )}
 
+        {/* Section: Rincian Biaya Produksi (Jika ada) */}
+        {data.productionCosts && data.productionCosts.length > 0 && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>
+              Rincian Biaya Produksi (Production Cost)
+            </Text>
+            <Text style={styles.sectionSubtitle}>
+              Biaya operasional yang mengurangi pemasukan brand dan langsung diberikan ke orang yang terlibat
+            </Text>
+            <View style={styles.table}>
+              <View style={styles.tableHeader}>
+                <Text style={{ ...styles.tableHeaderCell, width: "6%" }}>No</Text>
+                <Text style={{ ...styles.tableHeaderCell, width: "36%" }}>
+                  Keterangan Pos Biaya
+                </Text>
+                <Text style={{ ...styles.tableHeaderCell, width: "38%" }}>
+                  Orang yang Terlibat & Rincian
+                </Text>
+                <Text
+                  style={{
+                    ...styles.tableHeaderCell,
+                    width: "20%",
+                    textAlign: "right",
+                  }}
+                >
+                  Subtotal (Rp)
+                </Text>
+              </View>
+
+              {data.productionCosts.map((c, cIdx) => (
+                <View
+                  key={cIdx}
+                  style={[
+                    styles.tableRow,
+                    cIdx % 2 === 1 ? styles.tableRowAlt : {},
+                  ]}
+                >
+                  <Text style={{ ...styles.tableCell, width: "6%" }}>
+                    {cIdx + 1}
+                  </Text>
+                  <Text style={{ ...styles.tableCellBold, width: "36%" }}>
+                    {c.notes || `Pos Biaya #${cIdx + 1}`}
+                  </Text>
+                  <Text style={{ ...styles.tableCell, width: "38%" }}>
+                    {c.splits && c.splits.length > 0
+                      ? c.splits
+                          .map(
+                            (s) =>
+                              `${s.memberName || "Eksternal"}: ${formatRupiah(
+                                s.amount
+                              )}`
+                          )
+                          .join(", ")
+                      : "-"}
+                  </Text>
+                  <Text
+                    style={{
+                      ...styles.tableCellBold,
+                      width: "20%",
+                      textAlign: "right",
+                      color: COLORS.primary,
+                    }}
+                  >
+                    {formatRupiah(c.totalAmount)}
+                  </Text>
+                </View>
+              ))}
+
+              <View style={styles.tableFooterRow}>
+                <Text style={{ ...styles.tableHeaderCell, width: "80%" }}>
+                  Total Biaya Produksi
+                </Text>
+                <Text
+                  style={{
+                    ...styles.tableHeaderCell,
+                    width: "20%",
+                    textAlign: "right",
+                    color: COLORS.primary,
+                  }}
+                >
+                  {formatRupiah(data.calculation.totalProductionCost || 0)}
+                </Text>
+              </View>
+            </View>
+          </View>
+        )}
+
         {/* Section: Ringkasan Fee Kontributor Table */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Ringkasan Pembagian Fee Kontributor</Text>
@@ -639,131 +764,339 @@ export function ContributionPlanReportPDF({
           </Text>
 
           <View style={styles.table}>
-            <View style={styles.tableHeader}>
-              <Text style={{ ...styles.tableHeaderCell, width: "8%" }}>No</Text>
-              <Text style={{ ...styles.tableHeaderCell, width: "42%" }}>
-                Nama Kontributor
-              </Text>
-              <Text
-                style={{
-                  ...styles.tableHeaderCell,
-                  width: "25%",
-                  textAlign: "right",
-                }}
-              >
-                Persentase (%)
-              </Text>
-              <Text
-                style={{
-                  ...styles.tableHeaderCell,
-                  width: "25%",
-                  textAlign: "right",
-                }}
-              >
-                Fee Diterima (Rp)
-              </Text>
-            </View>
+            {(data.calculation.totalProductionCost || 0) > 0 ? (
+              <>
+                <View style={styles.tableHeader}>
+                  <Text style={{ ...styles.tableHeaderCell, width: "6%" }}>No</Text>
+                  <Text style={{ ...styles.tableHeaderCell, width: "30%" }}>
+                    Nama Kontributor
+                  </Text>
+                  <Text
+                    style={{
+                      ...styles.tableHeaderCell,
+                      width: "16%",
+                      textAlign: "center",
+                    }}
+                  >
+                    Persentase (%)
+                  </Text>
+                  <Text
+                    style={{
+                      ...styles.tableHeaderCell,
+                      width: "16%",
+                      textAlign: "right",
+                    }}
+                  >
+                    Fee Persen
+                  </Text>
+                  <Text
+                    style={{
+                      ...styles.tableHeaderCell,
+                      width: "16%",
+                      textAlign: "right",
+                    }}
+                  >
+                    Biaya Prod.
+                  </Text>
+                  <Text
+                    style={{
+                      ...styles.tableHeaderCell,
+                      width: "16%",
+                      textAlign: "right",
+                    }}
+                  >
+                    Total Diterima
+                  </Text>
+                </View>
 
-            {data.calculation.memberResults.map((m, idx) => (
-              <View
-                key={m.name}
-                style={[
-                  styles.tableRow,
-                  idx % 2 === 1 ? styles.tableRowAlt : {},
-                ]}
-              >
-                <Text style={{ ...styles.tableCell, width: "8%" }}>
-                  {idx + 1}
-                </Text>
-                <Text style={{ ...styles.tableCellBold, width: "42%" }}>
-                  {m.name}
-                </Text>
-                <Text
-                  style={{
-                    ...styles.tableCell,
-                    width: "25%",
-                    textAlign: "right",
-                  }}
-                >
-                  {m.percentage.toFixed(1).replace(".", ",")}%
-                </Text>
-                <Text
-                  style={{
-                    ...styles.tableCellBold,
-                    width: "25%",
-                    textAlign: "right",
-                    color: COLORS.primary,
-                  }}
-                >
-                  {formatRupiah(m.amount)}
-                </Text>
-              </View>
-            ))}
+                {data.calculation.memberResults.map((m, idx) => (
+                  <View
+                    key={m.name}
+                    style={[
+                      styles.tableRow,
+                      idx % 2 === 1 ? styles.tableRowAlt : {},
+                    ]}
+                  >
+                    <Text style={{ ...styles.tableCell, width: "6%" }}>
+                      {idx + 1}
+                    </Text>
+                    <Text style={{ ...styles.tableCellBold, width: "30%" }}>
+                      {m.name}
+                    </Text>
+                    <Text
+                      style={{
+                        ...styles.tableCell,
+                        width: "16%",
+                        textAlign: "center",
+                      }}
+                    >
+                      {m.percentage.toFixed(1).replace(".", ",")}%
+                    </Text>
+                    <Text
+                      style={{
+                        ...styles.tableCell,
+                        width: "16%",
+                        textAlign: "right",
+                      }}
+                    >
+                      {formatRupiah(m.feeFromPercentage ?? 0)}
+                    </Text>
+                    <Text
+                      style={{
+                        ...styles.tableCell,
+                        width: "16%",
+                        textAlign: "right",
+                      }}
+                    >
+                      {(m.productionCost || 0) > 0
+                        ? `+${formatRupiah(m.productionCost || 0)}`
+                        : "-"}
+                    </Text>
+                    <Text
+                      style={{
+                        ...styles.tableCellBold,
+                        width: "16%",
+                        textAlign: "right",
+                        color: COLORS.primary,
+                      }}
+                    >
+                      {formatRupiah(m.amount)}
+                    </Text>
+                  </View>
+                ))}
 
-            {/* Unallocated / Kas Tim row */}
-            {data.calculation.unallocatedPercentage > 0 && (
-              <View style={[styles.tableRow, { backgroundColor: COLORS.warningBg }]}>
-                <Text style={{ ...styles.tableCell, width: "8%" }}>-</Text>
-                <Text
-                  style={{
-                    ...styles.tableCellBold,
-                    width: "42%",
-                    color: COLORS.warningText,
-                  }}
-                >
-                  Kas Tim / Unassigned
-                </Text>
-                <Text
-                  style={{
-                    ...styles.tableCell,
-                    width: "25%",
-                    textAlign: "right",
-                    color: COLORS.warningText,
-                  }}
-                >
-                  {data.calculation.unallocatedPercentage
-                    .toFixed(1)
-                    .replace(".", ",")}
-                  %
-                </Text>
-                <Text
-                  style={{
-                    ...styles.tableCellBold,
-                    width: "25%",
-                    textAlign: "right",
-                    color: COLORS.warningText,
-                  }}
-                >
-                  {formatRupiah(data.calculation.unallocatedAmount)}
-                </Text>
-              </View>
+                {/* Unallocated / Kas Tim row */}
+                {data.calculation.unallocatedPercentage > 0 && (
+                  <View style={[styles.tableRow, { backgroundColor: COLORS.warningBg }]}>
+                    <Text style={{ ...styles.tableCell, width: "6%" }}>-</Text>
+                    <Text
+                      style={{
+                        ...styles.tableCellBold,
+                        width: "30%",
+                        color: COLORS.warningText,
+                      }}
+                    >
+                      Kas Tim / Unassigned
+                    </Text>
+                    <Text
+                      style={{
+                        ...styles.tableCell,
+                        width: "16%",
+                        textAlign: "center",
+                        color: COLORS.warningText,
+                      }}
+                    >
+                      {data.calculation.unallocatedPercentage
+                        .toFixed(1)
+                        .replace(".", ",")}
+                      %
+                    </Text>
+                    <Text
+                      style={{
+                        ...styles.tableCell,
+                        width: "16%",
+                        textAlign: "right",
+                        color: COLORS.warningText,
+                      }}
+                    >
+                      {formatRupiah(data.calculation.unallocatedAmount)}
+                    </Text>
+                    <Text
+                      style={{
+                        ...styles.tableCell,
+                        width: "16%",
+                        textAlign: "right",
+                        color: COLORS.warningText,
+                      }}
+                    >
+                      -
+                    </Text>
+                    <Text
+                      style={{
+                        ...styles.tableCellBold,
+                        width: "16%",
+                        textAlign: "right",
+                        color: COLORS.warningText,
+                      }}
+                    >
+                      {formatRupiah(data.calculation.unallocatedAmount)}
+                    </Text>
+                  </View>
+                )}
+
+                {/* Table Footer Total */}
+                <View style={styles.tableFooterRow}>
+                  <Text style={{ ...styles.tableHeaderCell, width: "36%" }}>
+                    Total Keseluruhan
+                  </Text>
+                  <Text
+                    style={{
+                      ...styles.tableHeaderCell,
+                      width: "16%",
+                      textAlign: "center",
+                    }}
+                  >
+                    100%
+                  </Text>
+                  <Text
+                    style={{
+                      ...styles.tableHeaderCell,
+                      width: "16%",
+                      textAlign: "right",
+                    }}
+                  >
+                    {formatRupiah(data.calculation.totalAllocatedAmount)}
+                  </Text>
+                  <Text
+                    style={{
+                      ...styles.tableHeaderCell,
+                      width: "16%",
+                      textAlign: "right",
+                    }}
+                  >
+                    +{formatRupiah(data.calculation.totalProductionCost || 0)}
+                  </Text>
+                  <Text
+                    style={{
+                      ...styles.tableHeaderCell,
+                      width: "16%",
+                      textAlign: "right",
+                      color: COLORS.primary,
+                    }}
+                  >
+                    {formatRupiah(data.calculation.totalDistributedAmount || data.totalAmount)}
+                  </Text>
+                </View>
+              </>
+            ) : (
+              <>
+                <View style={styles.tableHeader}>
+                  <Text style={{ ...styles.tableHeaderCell, width: "8%" }}>No</Text>
+                  <Text style={{ ...styles.tableHeaderCell, width: "42%" }}>
+                    Nama Kontributor
+                  </Text>
+                  <Text
+                    style={{
+                      ...styles.tableHeaderCell,
+                      width: "25%",
+                      textAlign: "right",
+                    }}
+                  >
+                    Persentase (%)
+                  </Text>
+                  <Text
+                    style={{
+                      ...styles.tableHeaderCell,
+                      width: "25%",
+                      textAlign: "right",
+                    }}
+                  >
+                    Fee Diterima (Rp)
+                  </Text>
+                </View>
+
+                {data.calculation.memberResults.map((m, idx) => (
+                  <View
+                    key={m.name}
+                    style={[
+                      styles.tableRow,
+                      idx % 2 === 1 ? styles.tableRowAlt : {},
+                    ]}
+                  >
+                    <Text style={{ ...styles.tableCell, width: "8%" }}>
+                      {idx + 1}
+                    </Text>
+                    <Text style={{ ...styles.tableCellBold, width: "42%" }}>
+                      {m.name}
+                    </Text>
+                    <Text
+                      style={{
+                        ...styles.tableCell,
+                        width: "25%",
+                        textAlign: "right",
+                      }}
+                    >
+                      {m.percentage.toFixed(1).replace(".", ",")}%
+                    </Text>
+                    <Text
+                      style={{
+                        ...styles.tableCellBold,
+                        width: "25%",
+                        textAlign: "right",
+                        color: COLORS.primary,
+                      }}
+                    >
+                      {formatRupiah(m.amount)}
+                    </Text>
+                  </View>
+                ))}
+
+                {/* Unallocated / Kas Tim row */}
+                {data.calculation.unallocatedPercentage > 0 && (
+                  <View style={[styles.tableRow, { backgroundColor: COLORS.warningBg }]}>
+                    <Text style={{ ...styles.tableCell, width: "8%" }}>-</Text>
+                    <Text
+                      style={{
+                        ...styles.tableCellBold,
+                        width: "42%",
+                        color: COLORS.warningText,
+                      }}
+                    >
+                      Kas Tim / Unassigned
+                    </Text>
+                    <Text
+                      style={{
+                        ...styles.tableCell,
+                        width: "25%",
+                        textAlign: "right",
+                        color: COLORS.warningText,
+                      }}
+                    >
+                      {data.calculation.unallocatedPercentage
+                        .toFixed(1)
+                        .replace(".", ",")}
+                      %
+                    </Text>
+                    <Text
+                      style={{
+                        ...styles.tableCellBold,
+                        width: "25%",
+                        textAlign: "right",
+                        color: COLORS.warningText,
+                      }}
+                    >
+                      {formatRupiah(data.calculation.unallocatedAmount)}
+                    </Text>
+                  </View>
+                )}
+
+                {/* Table Footer Total */}
+                <View style={styles.tableFooterRow}>
+                  <Text style={{ ...styles.tableHeaderCell, width: "50%" }}>
+                    Total Keseluruhan
+                  </Text>
+                  <Text
+                    style={{
+                      ...styles.tableHeaderCell,
+                      width: "25%",
+                      textAlign: "right",
+                    }}
+                  >
+                    100%
+                  </Text>
+                  <Text
+                    style={{
+                      ...styles.tableHeaderCell,
+                      width: "25%",
+                      textAlign: "right",
+                      color: COLORS.primary,
+                    }}
+                  >
+                    {formatRupiah(data.totalAmount)}
+                  </Text>
+                </View>
+              </>
             )}
-
-            {/* Table Footer Total */}
-            <View style={styles.tableFooterRow}>
-              <Text style={{ ...styles.tableHeaderCell, width: "50%" }}>
-                Total Keseluruhan
-              </Text>
-              <Text
-                style={{
-                  ...styles.tableHeaderCell,
-                  width: "25%",
-                  textAlign: "right",
-                }}
-              >
-                100%
-              </Text>
-              <Text
-                style={{
-                  ...styles.tableHeaderCell,
-                  width: "25%",
-                  textAlign: "right",
-                  color: COLORS.primary,
-                }}
-              >
-                {formatRupiah(data.totalAmount)}
-              </Text>
-            </View>
           </View>
         </View>
 
