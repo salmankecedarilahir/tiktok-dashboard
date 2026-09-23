@@ -15,6 +15,7 @@ import {
   CheckCircle,
   AlertCircle,
   Sparkles,
+  Receipt,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -34,6 +35,8 @@ import {
   calculateContribution,
   formatRupiah,
   DEFAULT_CONTRIBUTION_TASKS,
+  ProductionCostItem,
+  ProductionCostSplit,
 } from "@/lib/contribution-template";
 
 interface SystemUser {
@@ -74,6 +77,7 @@ interface PlanData {
   status: string;
   members: PlanMember[];
   tasks: PlanTask[];
+  productionCosts?: ProductionCostItem[];
 }
 
 export function ContributionEditorClient({ planId }: { planId: string }) {
@@ -94,6 +98,7 @@ export function ContributionEditorClient({ planId }: { planId: string }) {
   const [status, setStatus] = useState<string>("ACTIVE");
   const [members, setMembers] = useState<PlanMember[]>([]);
   const [tasks, setTasks] = useState<PlanTask[]>([]);
+  const [productionCosts, setProductionCosts] = useState<ProductionCostItem[]>([]);
 
   // Dialog state: Add user
   const [addUserOpen, setAddUserOpen] = useState(false);
@@ -127,6 +132,7 @@ export function ContributionEditorClient({ planId }: { planId: string }) {
       setStatus(p.status || "ACTIVE");
       setMembers(p.members || []);
       setTasks(p.tasks || []);
+      setProductionCosts(p.productionCosts || []);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Gagal memuat data");
     } finally {
@@ -138,7 +144,7 @@ export function ContributionEditorClient({ planId }: { planId: string }) {
     loadData();
   }, [loadData]);
 
-  // Real-time calculation whenever members, tasks, or totalAmount change
+  // Real-time calculation whenever members, tasks, productionCosts, or totalAmount change
   const calculation = useMemo(() => {
     return calculateContribution(
       totalAmount,
@@ -148,9 +154,10 @@ export function ContributionEditorClient({ planId }: { planId: string }) {
         weight: t.weight,
         isAllTeam: t.isAllTeam,
         assignees: t.assignees,
-      }))
+      })),
+      productionCosts
     );
-  }, [totalAmount, members, tasks]);
+  }, [totalAmount, members, tasks, productionCosts]);
 
   const totalTasksWeight = useMemo(() => {
     return tasks.reduce((sum, t) => sum + (Number(t.weight) || 0), 0);
@@ -191,7 +198,115 @@ export function ContributionEditorClient({ planId }: { planId: string }) {
         assignees: t.assignees.filter((a) => a !== name),
       }))
     );
+    // Also remove this member from any production cost splits
+    setProductionCosts((prev) =>
+      prev.map((c) => {
+        const updatedSplits = c.splits.filter((s) => s.memberName !== name);
+        const totalAmount = updatedSplits.reduce(
+          (sum, s) => sum + (Number(s.amount) || 0),
+          0
+        );
+        return {
+          ...c,
+          splits: updatedSplits,
+          totalAmount,
+        };
+      })
+    );
     toast.info(`${name} dihapus dari daftar kontributor`);
+  }
+
+  // Production Cost management
+  function handleAddProductionCostItem() {
+    const newItem: ProductionCostItem = {
+      notes: "",
+      totalAmount: 0,
+      splits:
+        members.length > 0 && members[0]?.name
+          ? [{ memberName: members[0].name, amount: 0, notes: "" }]
+          : [],
+    };
+    setProductionCosts((prev) => [...prev, newItem]);
+  }
+
+  function handleRemoveProductionCostItem(index: number) {
+    setProductionCosts((prev) => prev.filter((_, idx) => idx !== index));
+  }
+
+  function handleUpdateProductionCostNotes(index: number, notes: string) {
+    setProductionCosts((prev) => {
+      const current = prev[index];
+      if (!current) return prev;
+      const next = [...prev];
+      next[index] = { ...current, notes };
+      return next;
+    });
+  }
+
+  function handleAddSplit(itemIndex: number) {
+    setProductionCosts((prev) => {
+      const current = prev[itemIndex];
+      if (!current) return prev;
+      const next = [...prev];
+      const existingMembers = current.splits.map((s) =>
+        s.memberName.toLowerCase()
+      );
+      const available = members.find(
+        (m) => !existingMembers.includes(m.name.toLowerCase())
+      );
+      const defaultName = available ? available.name : members[0]?.name || "";
+
+      const updatedSplits: ProductionCostSplit[] = [
+        ...current.splits,
+        { memberName: defaultName, amount: 0, notes: "" },
+      ];
+      const totalAmount = updatedSplits.reduce(
+        (sum, s) => sum + (Number(s.amount) || 0),
+        0
+      );
+      next[itemIndex] = { ...current, splits: updatedSplits, totalAmount };
+      return next;
+    });
+  }
+
+  function handleRemoveSplit(itemIndex: number, splitIndex: number) {
+    setProductionCosts((prev) => {
+      const current = prev[itemIndex];
+      if (!current) return prev;
+      const next = [...prev];
+      const updatedSplits = current.splits.filter((_, sIdx) => sIdx !== splitIndex);
+      const totalAmount = updatedSplits.reduce(
+        (sum, s) => sum + (Number(s.amount) || 0),
+        0
+      );
+      next[itemIndex] = { ...current, splits: updatedSplits, totalAmount };
+      return next;
+    });
+  }
+
+  function handleUpdateSplit(
+    itemIndex: number,
+    splitIndex: number,
+    updates: Partial<ProductionCostSplit>
+  ) {
+    setProductionCosts((prev) => {
+      const current = prev[itemIndex];
+      if (!current) return prev;
+      const targetSplit = current.splits[splitIndex];
+      if (!targetSplit) return prev;
+      const next = [...prev];
+      const updatedSplits: ProductionCostSplit[] = [...current.splits];
+      updatedSplits[splitIndex] = {
+        ...targetSplit,
+        ...updates,
+      };
+      const totalAmount = updatedSplits.reduce(
+        (sum, s) => sum + (Number(s.amount) || 0),
+        0
+      );
+      next[itemIndex] = { ...current, splits: updatedSplits, totalAmount };
+      return next;
+    });
   }
 
   // Task management
@@ -310,6 +425,7 @@ export function ContributionEditorClient({ planId }: { planId: string }) {
           status: targetStatus,
           members,
           tasks,
+          productionCosts,
         }),
       });
 
@@ -343,6 +459,7 @@ export function ContributionEditorClient({ planId }: { planId: string }) {
           status,
           members,
           tasks,
+          productionCosts,
         }),
       });
 
@@ -579,6 +696,219 @@ export function ContributionEditorClient({ planId }: { planId: string }) {
         </CardContent>
       </Card>
 
+      {/* Section: Biaya Produksi (Production Cost) */}
+      <Card className="border-amber-500/30">
+        <CardHeader className="pb-3 flex flex-row items-center justify-between">
+          <div>
+            <div className="flex items-center gap-2">
+              <CardTitle className="text-base flex items-center gap-2">
+                <Receipt className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                <span>Biaya Produksi (Production Cost)</span>
+                <Badge
+                  variant="outline"
+                  className="text-xs bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300 border-amber-300"
+                >
+                  {formatRupiah(calculation.totalProductionCost)}
+                </Badge>
+              </CardTitle>
+            </div>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Biaya operasional produksi. Biaya ini mengurangi pemasukan brand, dan uang yang terlibat akan langsung ditambahkan ke kontributor terkait di luar persentase.
+            </p>
+          </div>
+
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={handleAddProductionCostItem}
+            className="gap-1.5 border-amber-300 hover:bg-amber-50 dark:hover:bg-amber-950/40"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            Tambah Biaya Produksi
+          </Button>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {productionCosts.length === 0 ? (
+            <div className="py-6 text-center border border-dashed rounded-lg bg-muted/20">
+              <p className="text-xs text-muted-foreground">
+                Belum ada biaya produksi. Klik &quot;Tambah Biaya Produksi&quot; jika proyek ini memiliki pengeluaran alat, transport, konsumsi, atau sewa.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {productionCosts.map((item, itemIdx) => (
+                <div
+                  key={itemIdx}
+                  className="p-3.5 rounded-lg border bg-card/60 space-y-3"
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div className="flex-1 min-w-[240px]">
+                      <Label className="text-xs font-semibold text-muted-foreground mb-1 block">
+                        Keterangan / Pos Biaya #{itemIdx + 1}
+                      </Label>
+                      <Input
+                        value={item.notes}
+                        onChange={(e) =>
+                          handleUpdateProductionCostNotes(itemIdx, e.target.value)
+                        }
+                        placeholder="e.g. Sewa Kamera & Lighting, Bensin & Tol, Properti Shoot"
+                        className="text-xs h-8"
+                      />
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <div className="text-right">
+                        <span className="text-[10px] text-muted-foreground block">
+                          Total Pos Ini
+                        </span>
+                        <span className="text-xs font-bold text-amber-700 dark:text-amber-400">
+                          {formatRupiah(item.totalAmount)}
+                        </span>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleRemoveProductionCostItem(itemIdx)}
+                        className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive"
+                        title="Hapus pos biaya ini"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+
+                  {/* Sub-alokasi Orang Terlibat & Biaya per Orang */}
+                  <div className="bg-muted/40 p-2.5 rounded-md border space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-semibold text-muted-foreground">
+                        Orang yang Terlibat & Biaya per Person:
+                      </span>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleAddSplit(itemIdx)}
+                        className="h-6 text-[11px] px-2 gap-1 text-primary hover:text-primary"
+                      >
+                        <Plus className="h-3 w-3" />
+                        Tambah Orang Terlibat
+                      </Button>
+                    </div>
+
+                    {item.splits.length === 0 ? (
+                      <p className="text-[11px] text-muted-foreground italic py-1">
+                        Belum ada orang dialokasikan untuk biaya ini. Klik &quot;+ Tambah Orang Terlibat&quot;.
+                      </p>
+                    ) : (
+                      <div className="space-y-1.5">
+                        {item.splits.map((split, sIdx) => (
+                          <div
+                            key={sIdx}
+                            className="flex flex-wrap items-center gap-2 text-xs"
+                          >
+                            {/* Member Dropdown */}
+                            <select
+                              value={split.memberName}
+                              onChange={(e) =>
+                                handleUpdateSplit(itemIdx, sIdx, {
+                                  memberName: e.target.value,
+                                })
+                              }
+                              className="h-8 px-2 text-xs rounded-md border bg-background text-foreground focus:outline-none focus:ring-1 focus:ring-primary w-44"
+                            >
+                              <option value="">-- Pilih Kontributor --</option>
+                              {members.map((m) => (
+                                <option key={m.name} value={m.name}>
+                                  {m.name} {m.role ? `(${m.role})` : ""}
+                                </option>
+                              ))}
+                              <option value="Vendor / Eksternal">
+                                Vendor Eksternal / Kas Umum
+                              </option>
+                            </select>
+
+                            {/* Amount Input */}
+                            <div className="flex items-center gap-1 w-36">
+                              <span className="text-[11px] text-muted-foreground">
+                                Rp
+                              </span>
+                              <Input
+                                type="number"
+                                min="0"
+                                step="10000"
+                                value={split.amount || ""}
+                                onChange={(e) =>
+                                  handleUpdateSplit(itemIdx, sIdx, {
+                                    amount: Math.max(
+                                      0,
+                                      parseInt(e.target.value, 10) || 0
+                                    ),
+                                  })
+                                }
+                                placeholder="0"
+                                className="h-8 text-xs font-medium"
+                              />
+                            </div>
+
+                            {/* Split specific note */}
+                            <Input
+                              value={split.notes || ""}
+                              onChange={(e) =>
+                                handleUpdateSplit(itemIdx, sIdx, {
+                                  notes: e.target.value,
+                                })
+                              }
+                              placeholder="Notes per orang (opsional)"
+                              className="h-8 text-xs flex-1 min-w-[140px]"
+                            />
+
+                            {/* Remove Split */}
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveSplit(itemIdx, sIdx)}
+                              className="h-7 w-7 text-muted-foreground hover:text-destructive flex items-center justify-center rounded transition"
+                              title="Hapus orang ini dari pos biaya"
+                            >
+                              ×
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Bottom calculation recap bar */}
+          <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t text-xs">
+            <div className="flex flex-wrap items-center gap-4 text-muted-foreground">
+              <span>
+                Total Brand Masuk:{" "}
+                <strong className="text-foreground">
+                  {formatRupiah(totalAmount)}
+                </strong>
+              </span>
+              <span>
+                Total Biaya Produksi:{" "}
+                <strong className="text-amber-700 dark:text-amber-400">
+                  - {formatRupiah(calculation.totalProductionCost)}
+                </strong>
+              </span>
+            </div>
+            <div className="text-right">
+              <span className="text-muted-foreground">
+                Sisa Pemasukan Brand (Net Dibagi via Bobot Job):{" "}
+              </span>
+              <strong className="text-primary font-bold text-sm ml-1">
+                {formatRupiah(calculation.netBrandAmount)}
+              </strong>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Section: Ringkasan Per Orang (Live Results Display) */}
       <Card className="border-primary/40 bg-gradient-to-br from-background via-background to-primary/5">
         <CardHeader className="pb-3">
@@ -589,19 +919,15 @@ export function ContributionEditorClient({ planId }: { planId: string }) {
                 <span>Ringkasan Per Orang (Hasil Pembagian Fee)</span>
               </CardTitle>
               <p className="text-xs text-muted-foreground mt-0.5">
-                Jumlah perolehan gaji/fee dihitung otomatis berdasarkan akumulasi bobot
-                job yang dikerjakan.
+                Uang yang diterima dihitung dari akumulasi bobot job (berdasarkan sisa brand) ditambah biaya produksi masing-masing orang.
               </p>
             </div>
             <div className="text-right">
               <span className="text-xs text-muted-foreground block">
-                Total Alokasi Terbagi:
+                Total Didistribusikan:
               </span>
               <span className="text-sm font-bold text-primary">
-                {calculation.totalAllocatedPercentage.toFixed(1).replace(".", ",")}%
-                {" ("}
-                {formatRupiah(calculation.totalAllocatedAmount)}
-                {")"}
+                {formatRupiah(calculation.totalDistributedAmount)}
               </span>
             </div>
           </div>
@@ -613,7 +939,9 @@ export function ContributionEditorClient({ planId }: { planId: string }) {
                 <tr>
                   <th className="py-2.5 px-4 text-left">Nama Kontributor</th>
                   <th className="py-2.5 px-4 text-center">Persentase (%)</th>
-                  <th className="py-2.5 px-4 text-right">Jumlah Diterima (Rp)</th>
+                  <th className="py-2.5 px-4 text-right">Fee Persen (Rp)</th>
+                  <th className="py-2.5 px-4 text-right">Biaya Produksi (Rp)</th>
+                  <th className="py-2.5 px-4 text-right">Total Diterima (Rp)</th>
                   <th className="py-2.5 px-4 text-left">Detail Kontribusi Job</th>
                 </tr>
               </thead>
@@ -625,6 +953,18 @@ export function ContributionEditorClient({ planId }: { planId: string }) {
                     </td>
                     <td className="py-3 px-4 text-center font-bold text-primary">
                       {m.percentage.toFixed(1).replace(".", ",")}%
+                    </td>
+                    <td className="py-3 px-4 text-right font-medium text-muted-foreground">
+                      {formatRupiah(m.feeFromPercentage)}
+                    </td>
+                    <td className="py-3 px-4 text-right">
+                      {m.productionCost > 0 ? (
+                        <span className="font-semibold text-amber-700 dark:text-amber-400">
+                          +{formatRupiah(m.productionCost)}
+                        </span>
+                      ) : (
+                        <span className="text-muted-foreground text-xs">-</span>
+                      )}
                     </td>
                     <td className="py-3 px-4 text-right font-bold text-foreground">
                       {formatRupiah(m.amount)}
@@ -664,6 +1004,12 @@ export function ContributionEditorClient({ planId }: { planId: string }) {
                         .toFixed(1)
                         .replace(".", ",")}
                       %
+                    </td>
+                    <td className="py-3 px-4 text-right font-bold">
+                      {formatRupiah(calculation.unallocatedAmount)}
+                    </td>
+                    <td className="py-3 px-4 text-right font-semibold text-muted-foreground text-xs">
+                      -
                     </td>
                     <td className="py-3 px-4 text-right font-bold">
                       {formatRupiah(calculation.unallocatedAmount)}

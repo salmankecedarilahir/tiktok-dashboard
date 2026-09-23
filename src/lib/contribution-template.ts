@@ -128,11 +128,26 @@ export const DEFAULT_PLAN_TYPE =
 
 export const DEFAULT_HOW_TO = "Based On Kesepakatan";
 
+export interface ProductionCostSplit {
+  memberName: string;
+  amount: number;
+  notes?: string;
+}
+
+export interface ProductionCostItem {
+  id?: string;
+  notes: string;
+  totalAmount: number;
+  splits: ProductionCostSplit[];
+}
+
 export interface MemberCalculation {
   name: string;
   userId?: string | null;
   percentage: number;
-  amount: number;
+  feeFromPercentage: number;
+  productionCost: number;
+  amount: number; // total = feeFromPercentage + productionCost
   breakdown: Array<{
     taskTitle: string;
     taskWeight: number;
@@ -142,10 +157,13 @@ export interface MemberCalculation {
 
 export interface ContributionCalculationResult {
   totalAmount: number;
+  totalProductionCost: number;
+  netBrandAmount: number;
   totalAllocatedPercentage: number;
   totalAllocatedAmount: number;
   unallocatedPercentage: number;
   unallocatedAmount: number;
+  totalDistributedAmount: number;
   memberResults: MemberCalculation[];
 }
 
@@ -157,6 +175,11 @@ export function calculateContribution(
     weight: number;
     isAllTeam: boolean;
     assignees: string[];
+  }>,
+  productionCosts?: Array<{
+    notes?: string | null;
+    totalAmount?: number | bigint;
+    splits?: Array<{ memberName: string; amount: number; notes?: string }> | unknown;
   }>
 ): ContributionCalculationResult {
   const memberMap = new Map<
@@ -165,6 +188,7 @@ export function calculateContribution(
       name: string;
       userId?: string | null;
       percentage: number;
+      productionCost: number;
       breakdown: Array<{
         taskTitle: string;
         taskWeight: number;
@@ -179,12 +203,42 @@ export function calculateContribution(
       name: m.name.trim(),
       userId: m.userId,
       percentage: 0,
+      productionCost: 0,
       breakdown: [],
     });
   }
 
+  // 1. Calculate Production Costs and per-member allocation
+  let totalProductionCost = 0;
+  if (Array.isArray(productionCosts)) {
+    for (const cost of productionCosts) {
+      const rawSplits = Array.isArray(cost.splits) ? cost.splits : [];
+      if (rawSplits.length > 0) {
+        for (const s of rawSplits) {
+          const splitAmount = Math.max(0, Math.round(Number(s.amount) || 0));
+          totalProductionCost += splitAmount;
+          const sKey = (s.memberName || "").trim().toLowerCase();
+          const target = memberMap.get(sKey);
+          if (target) {
+            target.productionCost += splitAmount;
+          }
+        }
+      } else {
+        const itemAmount = Math.max(
+          0,
+          Math.round(Number(cost.totalAmount) || 0)
+        );
+        totalProductionCost += itemAmount;
+      }
+    }
+  }
+
+  // Net brand amount distributed based on task percentage
+  const netBrandAmount = Math.max(0, totalAmount - totalProductionCost);
+
   const memberCount = members.length;
 
+  // 2. Distribute task percentages
   for (const task of tasks) {
     const taskWeight = Number(task.weight) || 0;
     if (taskWeight <= 0) continue;
@@ -228,45 +282,110 @@ export function calculateContribution(
     }
   }
 
+  // 3. Compile member results with exact balanced allocation (Largest Remainder Method)
+  const rawPercentages = members.map((m) => {
+    const key = m.name.trim().toLowerCase();
+    const item = memberMap.get(key);
+    return item ? item.percentage : 0;
+  });
+
+  const totalRawPercentage = rawPercentages.reduce((a, b) => a + b, 0);
+  const targetAllocatedPercentage =
+    Math.round(totalRawPercentage * 100) / 100;
+
+  // Allocate percentage in basis points (hundredths of a percent) so sum matches targetAllocatedPercentage exactly
+  const hundredths = allocateIntegers(
+    Math.round(targetAllocatedPercentage * 100),
+    rawPercentages
+  );
+  const roundedPercentages = hundredths.map((h) => h / 100);
+
+  // Allocate netBrandAmount among members so sum(feeFromPercentage) matches targetAllocatedAmount exactly
+  const targetAllocatedAmount = Math.round(
+    (targetAllocatedPercentage / 100) * netBrandAmount
+  );
+  const allocatedFees = allocateIntegers(
+    targetAllocatedAmount,
+    rawPercentages
+  );
+
   const memberResults: MemberCalculation[] = [];
   let totalAllocatedPercentage = 0;
   let totalAllocatedAmount = 0;
 
-  for (const m of members) {
+  members.forEach((m, idx) => {
     const key = m.name.trim().toLowerCase();
     const item = memberMap.get(key);
-    const rawPct = item ? item.percentage : 0;
-    // Round percentage to 2 decimal places
-    const percentage = Math.round(rawPct * 100) / 100;
-    const amount = Math.round((percentage / 100) * totalAmount);
+    const percentage = roundedPercentages[idx] ?? 0;
+    const feeFromPercentage = allocatedFees[idx] ?? 0;
+    const prodCost = item ? item.productionCost : 0;
+    const amount = feeFromPercentage + prodCost;
 
     totalAllocatedPercentage += percentage;
-    totalAllocatedAmount += amount;
+    totalAllocatedAmount += feeFromPercentage;
 
     memberResults.push({
       name: m.name.trim(),
       userId: m.userId,
       percentage,
+      feeFromPercentage,
+      productionCost: prodCost,
       amount,
       breakdown: item?.breakdown ?? [],
     });
-  }
+  });
 
   totalAllocatedPercentage = Math.round(totalAllocatedPercentage * 100) / 100;
   const unallocatedPercentage = Math.max(
     0,
     Math.round((100 - totalAllocatedPercentage) * 100) / 100
   );
-  const unallocatedAmount = Math.max(0, totalAmount - totalAllocatedAmount);
+  const unallocatedAmount = Math.max(
+    0,
+    netBrandAmount - totalAllocatedAmount
+  );
+
+  const totalDistributedAmount = totalAllocatedAmount + totalProductionCost;
 
   return {
     totalAmount,
+    totalProductionCost,
+    netBrandAmount,
     totalAllocatedPercentage,
     totalAllocatedAmount,
     unallocatedPercentage,
     unallocatedAmount,
+    totalDistributedAmount,
     memberResults,
   };
+}
+
+/**
+ * Largest Remainder Method (Hare-Niemeyer) for distributing an integer total
+ * proportionally according to weights without rounding accumulation errors.
+ */
+function allocateIntegers(total: number, weights: number[]): number[] {
+  const sumWeights = weights.reduce((a, b) => a + b, 0);
+  if (sumWeights === 0 || total === 0) return weights.map(() => 0);
+
+  const exacts = weights.map((w) => (w / sumWeights) * total);
+  const floors = exacts.map((e) => Math.floor(e));
+  const remainders = exacts.map((e, i) => ({ index: i, rem: e - (floors[i] ?? 0) }));
+
+  let diff = total - floors.reduce((a, b) => a + b, 0);
+
+  // Distribute the remaining units to the largest fractional remainders
+  remainders.sort((a, b) => b.rem - a.rem);
+
+  const result = [...floors];
+  for (let i = 0; i < diff && i < remainders.length; i++) {
+    const targetIdx = remainders[i]?.index;
+    if (targetIdx !== undefined && result[targetIdx] !== undefined) {
+      result[targetIdx]++;
+    }
+  }
+
+  return result;
 }
 
 export function formatRupiah(n: number | bigint): string {

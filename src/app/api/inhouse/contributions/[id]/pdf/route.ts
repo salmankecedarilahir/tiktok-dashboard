@@ -25,6 +25,7 @@ export async function GET(
       include: {
         members: { orderBy: { name: "asc" } },
         tasks: { orderBy: { orderNumber: "asc" } },
+        productionCosts: { orderBy: { createdAt: "asc" } },
       },
     });
 
@@ -36,6 +37,15 @@ export async function GET(
     }
 
     const totalAmount = Number(plan.totalAmount);
+    const serializedProductionCosts = (plan.productionCosts || []).map((c) => ({
+      id: c.id,
+      notes: c.notes || "",
+      totalAmount: Number(c.totalAmount),
+      splits: Array.isArray(c.splits) ? c.splits : [],
+      createdAt: c.createdAt.toISOString(),
+      updatedAt: c.updatedAt.toISOString(),
+    }));
+
     const calculation = calculateContribution(
       totalAmount,
       plan.members.map((m) => ({ name: m.name, userId: m.userId })),
@@ -44,7 +54,8 @@ export async function GET(
         weight: t.weight,
         isAllTeam: t.isAllTeam,
         assignees: t.assignees,
-      }))
+      })),
+      serializedProductionCosts
     );
 
     const channelConfig = await prisma.channelConfig.findFirst({
@@ -78,14 +89,24 @@ export async function GET(
         assignees: t.assignees,
         notes: t.notes,
       })),
+      productionCosts: serializedProductionCosts.map((c) => ({
+        notes: c.notes,
+        totalAmount: c.totalAmount,
+        splits: Array.isArray(c.splits) ? (c.splits as any) : [],
+      })),
       calculation: {
+        totalProductionCost: calculation.totalProductionCost,
+        netBrandAmount: calculation.netBrandAmount,
         totalAllocatedPercentage: calculation.totalAllocatedPercentage,
         totalAllocatedAmount: calculation.totalAllocatedAmount,
         unallocatedPercentage: calculation.unallocatedPercentage,
         unallocatedAmount: calculation.unallocatedAmount,
+        totalDistributedAmount: calculation.totalDistributedAmount,
         memberResults: calculation.memberResults.map((m) => ({
           name: m.name,
           percentage: m.percentage,
+          feeFromPercentage: m.feeFromPercentage,
+          productionCost: m.productionCost,
           amount: m.amount,
         })),
       },
