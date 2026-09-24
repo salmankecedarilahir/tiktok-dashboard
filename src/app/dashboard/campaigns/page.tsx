@@ -6,8 +6,22 @@ import { useSession } from "next-auth/react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { Plus, Video, Calendar, Trash2, ExternalLink } from "lucide-react";
+
+interface CampaignContributionPlan {
+  id: string;
+  title: string;
+  status: string;
+}
 
 interface Campaign {
   id: string;
@@ -20,6 +34,7 @@ interface Campaign {
   notes: string | null;
   videoCount: number;
   createdAt: string;
+  contributionPlan?: CampaignContributionPlan | null;
 }
 
 export default function CampaignsPage() {
@@ -27,7 +42,9 @@ export default function CampaignsPage() {
   const canEdit = session?.user?.role !== "VIEWER";
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [loading, setLoading] = useState(true);
-  const [deleting, setDeleting] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Campaign | null>(null);
+  const [deletePlanChecked, setDeletePlanChecked] = useState(true);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   async function loadCampaigns() {
     try {
@@ -46,22 +63,32 @@ export default function CampaignsPage() {
     loadCampaigns();
   }, []);
 
-  async function handleDelete(id: string, brandName: string) {
-    if (!confirm(`Delete campaign untuk ${brandName}? Semua video data akan ikut terhapus.`)) {
-      return;
-    }
+  function openDeleteDialog(campaign: Campaign) {
+    setDeleteTarget(campaign);
+    setDeletePlanChecked(!!campaign.contributionPlan);
+  }
 
-    setDeleting(id);
+  async function confirmDelete() {
+    if (!deleteTarget) return;
+
+    setIsDeleting(true);
     try {
-      const res = await fetch(`/api/campaigns/${id}`, { method: "DELETE" });
+      const url = `/api/campaigns/${deleteTarget.id}?deleteContributionPlan=${deletePlanChecked}`;
+      const res = await fetch(url, { method: "DELETE" });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Delete failed");
-      toast.success("Campaign deleted");
+
+      if (data.deletedContributionPlan) {
+        toast.success("Campaign dan Contribution Plan berhasil dihapus");
+      } else {
+        toast.success("Campaign berhasil dihapus");
+      }
+      setDeleteTarget(null);
       await loadCampaigns();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Delete failed");
+      toast.error(err instanceof Error ? err.message : "Gagal menghapus campaign");
     } finally {
-      setDeleting(null);
+      setIsDeleting(false);
     }
   }
 
@@ -135,8 +162,8 @@ export default function CampaignsPage() {
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => handleDelete(c.id, c.brandName)}
-                        disabled={deleting === c.id}
+                        onClick={() => openDeleteDialog(c)}
+                        disabled={isDeleting && deleteTarget?.id === c.id}
                         className="text-red-600 hover:text-red-700"
                       >
                         <Trash2 className="h-4 w-4" />
@@ -146,7 +173,7 @@ export default function CampaignsPage() {
                 </div>
               </CardHeader>
               <CardContent>
-                <div className="flex gap-6 text-sm text-muted-foreground">
+                <div className="flex gap-6 text-sm text-muted-foreground flex-wrap">
                   <div className="flex items-center gap-1.5">
                     <Calendar className="h-4 w-4" />
                     {formatDate(c.startDate)} → {formatDate(c.endDate)}
@@ -155,6 +182,23 @@ export default function CampaignsPage() {
                     <Video className="h-4 w-4" />
                     {c.videoCount} video{c.videoCount !== 1 ? "s" : ""}
                   </div>
+                  {c.contributionPlan && (
+                    <Link
+                      href={`/dashboard/inhouse/contributions/${c.contributionPlan.id}`}
+                      className="hover:underline"
+                    >
+                      <Badge
+                        variant="outline"
+                        className={
+                          c.contributionPlan.status === "DRAFT"
+                            ? "border-amber-400 bg-amber-50 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300 text-[10px]"
+                            : "border-emerald-400 bg-emerald-50 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300 text-[10px]"
+                        }
+                      >
+                        Plan: {c.contributionPlan.status}
+                      </Badge>
+                    </Link>
+                  )}
                 </div>
                 {c.notes && (
                   <p className="mt-3 text-sm text-muted-foreground line-clamp-2">{c.notes}</p>
@@ -164,6 +208,79 @@ export default function CampaignsPage() {
           ))}
         </div>
       )}
+
+      {/* Modal Konfirmasi Hapus Campaign & Opsi Hapus Contribution Plan */}
+      <Dialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+        <DialogContent className="sm:max-w-[480px]">
+          <DialogHeader>
+            <DialogTitle>Hapus Campaign</DialogTitle>
+            <DialogDescription>
+              Yakin ingin menghapus campaign{" "}
+              <span className="font-semibold text-foreground">
+                &quot;{deleteTarget?.campaignName}&quot;
+              </span>{" "}
+              ({deleteTarget?.brandName})? Seluruh data metrik video di dalamnya akan ikut terhapus permanen.
+            </DialogDescription>
+          </DialogHeader>
+
+          {deleteTarget && (
+            <div className="rounded-lg border p-4 bg-muted/40 space-y-3 my-2">
+              <label className="flex items-start gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={deletePlanChecked}
+                  onChange={(e) => setDeletePlanChecked(e.target.checked)}
+                  className="mt-0.5 h-4 w-4 rounded border-input text-primary focus:ring-ring"
+                />
+                <div className="space-y-1">
+                  <div className="text-sm font-medium leading-none">
+                    Hapus juga Contribution Plan terkait
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    {deleteTarget.contributionPlan ? (
+                      <>
+                        Plan:{" "}
+                        <span className="font-medium text-foreground">
+                          {deleteTarget.contributionPlan.title}
+                        </span>{" "}
+                        ({deleteTarget.contributionPlan.status})
+                      </>
+                    ) : (
+                      "Contribution Plan dengan nama brand & campaign ini (jika ada)"
+                    )}
+                  </p>
+                </div>
+              </label>
+              {!deletePlanChecked && (
+                <p className="text-[11px] text-muted-foreground italic pl-7">
+                  Catatan: Contribution Plan akan tetap aman tersimpan di menu Inhouse.
+                </p>
+              )}
+            </div>
+          )}
+
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              variant="outline"
+              onClick={() => setDeleteTarget(null)}
+              disabled={isDeleting}
+            >
+              Batal
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={confirmDelete}
+              disabled={isDeleting}
+            >
+              {isDeleting
+                ? "Menghapus..."
+                : deletePlanChecked
+                ? "Hapus Campaign & Plan"
+                : "Hapus Campaign Saja"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

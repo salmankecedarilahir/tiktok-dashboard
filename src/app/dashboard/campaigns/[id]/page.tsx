@@ -2,10 +2,19 @@
 
 import { useEffect, useState, use } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { toast } from "sonner";
 import {
   ArrowLeft,
@@ -21,6 +30,7 @@ import {
   Share2,
   Bookmark,
   FileText,
+  Users,
 } from "lucide-react";
 
 interface CampaignVideo {
@@ -45,6 +55,13 @@ interface CampaignBrief {
   inquiryDate: string;
 }
 
+interface CampaignContributionPlan {
+  id: string;
+  title: string;
+  status: string;
+  totalAmount: number;
+}
+
 interface CampaignDetail {
   id: string;
   brandName: string;
@@ -56,6 +73,7 @@ interface CampaignDetail {
   notes: string | null;
   videos: CampaignVideo[];
   brief?: CampaignBrief | null;
+  contributionPlan?: CampaignContributionPlan | null;
 }
 
 export default function CampaignDetailPage({
@@ -64,6 +82,7 @@ export default function CampaignDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = use(params);
+  const router = useRouter();
   const { data: session } = useSession();
   const canEdit = session?.user?.role !== "VIEWER";
   const [campaign, setCampaign] = useState<CampaignDetail | null>(null);
@@ -71,6 +90,31 @@ export default function CampaignDetailPage({
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deletePlanChecked, setDeletePlanChecked] = useState(true);
+  const [isDeletingCampaign, setIsDeletingCampaign] = useState(false);
+
+  async function confirmDeleteCampaign() {
+    if (!campaign) return;
+    setIsDeletingCampaign(true);
+    try {
+      const url = `/api/campaigns/${id}?deleteContributionPlan=${deletePlanChecked}`;
+      const res = await fetch(url, { method: "DELETE" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Gagal menghapus campaign");
+
+      if (data.deletedContributionPlan) {
+        toast.success("Campaign dan Contribution Plan berhasil dihapus");
+      } else {
+        toast.success("Campaign berhasil dihapus");
+      }
+      router.push("/dashboard/campaigns");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Gagal menghapus campaign");
+    } finally {
+      setIsDeletingCampaign(false);
+    }
+  }
 
   const [form, setForm] = useState({
     videoTitle: "",
@@ -253,6 +297,40 @@ export default function CampaignDetailPage({
         </div>
       )}
 
+      {campaign?.contributionPlan && (
+        <div className="mb-6 rounded-lg border-2 border-amber-500/30 bg-amber-500/5 p-4 flex items-center justify-between flex-wrap gap-3">
+          <div className="flex items-center gap-3">
+            <Users className="h-5 w-5 text-amber-600 shrink-0" />
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-sm font-medium">Draft Contribution Plan Tim</span>
+                <Badge
+                  variant="outline"
+                  className={
+                    campaign.contributionPlan.status === "DRAFT"
+                      ? "border-amber-400 bg-amber-100 text-amber-800 text-[10px]"
+                      : "border-emerald-400 bg-emerald-100 text-emerald-800 text-[10px]"
+                  }
+                >
+                  {campaign.contributionPlan.status}
+                </Badge>
+              </div>
+              <div className="text-xs text-muted-foreground mt-0.5">
+                {campaign.contributionPlan.title}
+                {campaign.contributionPlan.totalAmount > 0 &&
+                  ` • Rp ${campaign.contributionPlan.totalAmount.toLocaleString("id-ID")}`}
+              </div>
+            </div>
+          </div>
+          <Link href={`/dashboard/inhouse/contributions/${campaign.contributionPlan.id}`}>
+            <Button variant="outline" size="sm" className="border-amber-400/50 hover:bg-amber-100/50">
+              <ExternalLink className="mr-2 h-4 w-4" />
+              Buka Contribution Plan
+            </Button>
+          </Link>
+        </div>
+      )}
+
       <Card className="mb-6">
         <CardHeader>
           <div className="flex justify-between items-start gap-4">
@@ -267,14 +345,29 @@ export default function CampaignDetailPage({
                 {campaign.campaignName}
               </CardDescription>
             </div>
-            {canEdit && campaign.videos.length > 0 && (
-              <a href={reportUrl} target="_blank" rel="noopener">
-                <Button>
-                  <FileText className="mr-2 h-4 w-4" />
-                  Generate Report
+            <div className="flex items-center gap-2 flex-wrap">
+              {canEdit && campaign.videos.length > 0 && (
+                <a href={reportUrl} target="_blank" rel="noopener">
+                  <Button>
+                    <FileText className="mr-2 h-4 w-4" />
+                    Generate Report
+                  </Button>
+                </a>
+              )}
+              {canEdit && (
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setDeletePlanChecked(!!campaign.contributionPlan);
+                    setDeleteOpen(true);
+                  }}
+                  className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/20 border-red-200 dark:border-red-900"
+                >
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  Hapus Campaign
                 </Button>
-              </a>
-            )}
+              )}
+            </div>
           </div>
         </CardHeader>
         <CardContent>
@@ -411,6 +504,79 @@ export default function CampaignDetailPage({
           )}
         </CardContent>
       </Card>
+
+      {/* Modal Konfirmasi Hapus Campaign & Opsi Hapus Contribution Plan */}
+      <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+        <DialogContent className="sm:max-w-[480px]">
+          <DialogHeader>
+            <DialogTitle>Hapus Campaign</DialogTitle>
+            <DialogDescription>
+              Yakin ingin menghapus campaign{" "}
+              <span className="font-semibold text-foreground">
+                &quot;{campaign?.campaignName}&quot;
+              </span>{" "}
+              ({campaign?.brandName})? Seluruh data metrik video di dalamnya akan ikut terhapus permanen.
+            </DialogDescription>
+          </DialogHeader>
+
+          {campaign && (
+            <div className="rounded-lg border p-4 bg-muted/40 space-y-3 my-2">
+              <label className="flex items-start gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={deletePlanChecked}
+                  onChange={(e) => setDeletePlanChecked(e.target.checked)}
+                  className="mt-0.5 h-4 w-4 rounded border-input text-primary focus:ring-ring"
+                />
+                <div className="space-y-1">
+                  <div className="text-sm font-medium leading-none">
+                    Hapus juga Contribution Plan terkait
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    {campaign.contributionPlan ? (
+                      <>
+                        Plan:{" "}
+                        <span className="font-medium text-foreground">
+                          {campaign.contributionPlan.title}
+                        </span>{" "}
+                        ({campaign.contributionPlan.status})
+                      </>
+                    ) : (
+                      "Contribution Plan dengan nama brand & campaign ini (jika ada)"
+                    )}
+                  </p>
+                </div>
+              </label>
+              {!deletePlanChecked && (
+                <p className="text-[11px] text-muted-foreground italic pl-7">
+                  Catatan: Contribution Plan akan tetap aman tersimpan di menu Inhouse.
+                </p>
+              )}
+            </div>
+          )}
+
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              variant="outline"
+              onClick={() => setDeleteOpen(false)}
+              disabled={isDeletingCampaign}
+            >
+              Batal
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={confirmDeleteCampaign}
+              disabled={isDeletingCampaign}
+            >
+              {isDeletingCampaign
+                ? "Menghapus..."
+                : deletePlanChecked
+                ? "Hapus Campaign & Plan"
+                : "Hapus Campaign Saja"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -7,6 +7,10 @@ import {
 } from "@react-pdf/renderer";
 import { formatRupiah } from "@/lib/contribution-template";
 
+// ============================================
+// TYPES
+// ============================================
+
 export interface ContributionPlanReportData {
   title: string;
   brandName?: string | null;
@@ -16,6 +20,11 @@ export interface ContributionPlanReportData {
   howTo?: string | null;
   notes?: string | null;
   date: string;
+  status?: string | null;
+  channelConfig?: {
+    channelName: string;
+    channelHandle: string;
+  } | null;
   members: Array<{
     name: string;
     role?: string | null;
@@ -29,103 +38,282 @@ export interface ContributionPlanReportData {
     assignees: string[];
     notes?: string | null;
   }>;
+  productionCosts?: Array<{
+    notes?: string | null;
+    totalAmount: number;
+    splits: Array<{
+      memberName: string;
+      amount: number;
+      notes?: string;
+    }>;
+  }>;
   calculation: {
+    totalProductionCost?: number;
+    netBrandAmount?: number;
     totalAllocatedPercentage: number;
     totalAllocatedAmount: number;
     unallocatedPercentage: number;
     unallocatedAmount: number;
+    totalDistributedAmount?: number;
     memberResults: Array<{
       name: string;
       percentage: number;
+      feeFromPercentage?: number;
+      productionCost?: number;
       amount: number;
     }>;
   };
 }
 
+// ============================================
+// COLORS (Aligned with CampaignReport)
+// ============================================
+
 const COLORS = {
-  primary: "#DC2626", // Red CAU brand
-  primaryLight: "#FEE2E2",
-  text: "#0F172A",
-  muted: "#64748B",
-  light: "#94A3B8",
-  border: "#E2E8F0",
-  bgLight: "#F8FAFC",
-  bgAccent: "#FEF2F2",
-  white: "#FFFFFF",
-  success: "#16A34A",
+  primary: "#DC2626",
+  primaryDark: "#991B1B",
+  primaryLight: "#FCA5A5",
+  black: "#0a0a0a",
+  text: "#1a1a1a",
+  muted: "#666666",
+  light: "#999999",
+  border: "#e5e5e5",
+  bgLight: "#f9fafb",
+  bgAccent: "#fef2f2",
+  white: "#ffffff",
+  warningBg: "#fffbeb",
+  warningText: "#b45309",
 };
+
+// ============================================
+// STYLES (Aligned with CampaignReport)
+// ============================================
 
 const styles = StyleSheet.create({
   page: {
-    paddingTop: 36,
-    paddingBottom: 40,
-    paddingHorizontal: 36,
-    fontSize: 9,
     fontFamily: "Helvetica",
+    fontSize: 10,
     color: COLORS.text,
-    backgroundColor: COLORS.white,
+    paddingTop: 36,
+    paddingBottom: 50,
+    paddingHorizontal: 36,
   },
-  header: {
+
+  coverPage: {
+    fontFamily: "Helvetica",
+    backgroundColor: COLORS.primary,
+    color: COLORS.white,
+    padding: 50,
+    height: "100%",
+    flexDirection: "column",
+    justifyContent: "space-between",
+  },
+  coverHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "flex-start",
-    paddingBottom: 14,
-    borderBottomWidth: 1.5,
-    borderBottomColor: COLORS.primary,
-    marginBottom: 16,
+    fontSize: 10,
+    color: COLORS.white,
+    textTransform: "uppercase",
+    letterSpacing: 2,
   },
-  brandTitle: {
-    fontSize: 16,
+  coverMain: {
+    flexDirection: "column",
+  },
+  coverDivider: {
+    width: 60,
+    height: 4,
+    backgroundColor: COLORS.white,
+    marginBottom: 24,
+  },
+  coverFor: {
+    fontSize: 11,
+    color: COLORS.white,
+    opacity: 0.8,
+    textTransform: "uppercase",
+    letterSpacing: 2,
+    marginBottom: 8,
+  },
+  coverBrand: {
+    fontSize: 42,
     fontFamily: "Helvetica-Bold",
-    color: COLORS.primary,
+    color: COLORS.white,
+    marginBottom: 16,
+    letterSpacing: -1,
   },
-  brandSub: {
-    fontSize: 8,
-    color: COLORS.muted,
+  coverCampaign: {
+    fontSize: 18,
+    color: COLORS.white,
+    opacity: 0.95,
+    marginBottom: 8,
+  },
+  coverDate: {
+    fontSize: 12,
+    color: COLORS.white,
+    opacity: 0.8,
+  },
+  coverFooter: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-end",
+    borderTopWidth: 1,
+    borderTopColor: "rgba(255, 255, 255, 0.25)",
+    paddingTop: 16,
+  },
+  coverChannel: {
+    fontSize: 14,
+    fontFamily: "Helvetica-Bold",
+    color: COLORS.white,
+  },
+  coverHandle: {
+    fontSize: 10,
+    color: COLORS.white,
+    opacity: 0.85,
     marginTop: 2,
   },
-  headerRight: {
-    alignItems: "flex-end",
+
+  pageHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 20,
+    paddingBottom: 12,
+    borderBottomWidth: 2,
+    borderBottomColor: COLORS.primary,
   },
-  reportBadge: {
-    backgroundColor: COLORS.primaryLight,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 4,
-    fontSize: 8,
-    fontFamily: "Helvetica-Bold",
-    color: COLORS.primary,
+  pageHeaderLeft: {
+    flexDirection: "column",
   },
-  reportDate: {
-    fontSize: 8,
-    color: COLORS.muted,
-    marginTop: 3,
-  },
-  titleBlock: {
-    marginBottom: 14,
-  },
-  planTitle: {
-    fontSize: 18,
+  pageHeaderBrand: {
+    fontSize: 13,
     fontFamily: "Helvetica-Bold",
     color: COLORS.text,
   },
-  brandNameText: {
+  pageHeaderHandle: {
+    fontSize: 9,
+    color: COLORS.muted,
+    marginTop: 1,
+  },
+  pageHeaderRight: {
+    flexDirection: "column",
+    alignItems: "flex-end",
+  },
+  pageHeaderLabel: {
+    fontSize: 8,
+    color: COLORS.muted,
+    textTransform: "uppercase",
+    letterSpacing: 1.5,
+  },
+  pageHeaderTitle: {
     fontSize: 11,
-    color: COLORS.primary,
     fontFamily: "Helvetica-Bold",
+    color: COLORS.text,
     marginTop: 2,
   },
-  metaGrid: {
-    backgroundColor: COLORS.bgLight,
+
+  section: {
+    marginBottom: 18,
+  },
+  sectionTitle: {
+    fontSize: 12,
+    fontFamily: "Helvetica-Bold",
+    color: COLORS.text,
+    marginBottom: 4,
+    textTransform: "uppercase",
+    letterSpacing: 1,
+  },
+  sectionSubtitle: {
+    fontSize: 9,
+    color: COLORS.muted,
+    marginBottom: 10,
+    lineHeight: 1.3,
+  },
+
+  heroStat: {
+    backgroundColor: COLORS.primary,
+    color: COLORS.white,
+    padding: 16,
     borderRadius: 6,
+    marginBottom: 12,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  heroStatLeft: {
+    flexDirection: "column",
+  },
+  heroStatLabel: {
+    fontSize: 9,
+    color: COLORS.white,
+    opacity: 0.85,
+    textTransform: "uppercase",
+    letterSpacing: 1.2,
+  },
+  heroStatValue: {
+    fontSize: 26,
+    fontFamily: "Helvetica-Bold",
+    color: COLORS.white,
+    marginTop: 2,
+    letterSpacing: -0.5,
+  },
+  heroStatRight: {
+    flexDirection: "column",
+    alignItems: "flex-end",
+  },
+  heroStatTag: {
+    fontSize: 9,
+    color: COLORS.white,
+    opacity: 0.95,
+    backgroundColor: COLORS.primaryDark,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 4,
+    fontFamily: "Helvetica-Bold",
+  },
+
+  statGrid: {
+    flexDirection: "row",
+    gap: 8,
+    marginBottom: 12,
+  },
+  statBox: {
+    flex: 1,
     padding: 10,
-    marginBottom: 16,
+    backgroundColor: COLORS.bgLight,
+    borderRadius: 4,
+    borderLeftWidth: 3,
+    borderLeftColor: COLORS.primary,
+  },
+  statLabel: {
+    fontSize: 7.5,
+    color: COLORS.muted,
+    textTransform: "uppercase",
+    letterSpacing: 0.8,
+    marginBottom: 3,
+    fontFamily: "Helvetica-Bold",
+  },
+  statValue: {
+    fontSize: 13,
+    fontFamily: "Helvetica-Bold",
+    color: COLORS.text,
+  },
+
+  metaBox: {
+    backgroundColor: COLORS.bgLight,
+    borderRadius: 4,
     borderWidth: 1,
     borderColor: COLORS.border,
+    padding: 8,
+    marginBottom: 12,
   },
   metaRow: {
     flexDirection: "row",
-    marginBottom: 4,
+    paddingVertical: 3,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+  },
+  metaRowLast: {
+    flexDirection: "row",
+    paddingVertical: 3,
   },
   metaLabel: {
     width: "22%",
@@ -138,48 +326,16 @@ const styles = StyleSheet.create({
     width: "78%",
     fontSize: 8.5,
     color: COLORS.text,
+    lineHeight: 1.3,
   },
-  highlightCard: {
-    flexDirection: "row",
-    backgroundColor: COLORS.bgAccent,
-    borderWidth: 1,
-    borderColor: "#FECACA",
-    borderRadius: 6,
-    padding: 10,
-    marginBottom: 16,
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  highlightLabel: {
-    fontSize: 8.5,
-    fontFamily: "Helvetica-Bold",
-    color: COLORS.primary,
-    textTransform: "uppercase",
-  },
-  highlightValue: {
-    fontSize: 16,
-    fontFamily: "Helvetica-Bold",
-    color: COLORS.primary,
-  },
-  sectionHeader: {
-    fontSize: 10,
-    fontFamily: "Helvetica-Bold",
-    color: COLORS.text,
-    textTransform: "uppercase",
-    letterSpacing: 0.8,
-    marginBottom: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
-    paddingBottom: 4,
-  },
-  // Table styles
+
   table: {
     width: "100%",
-    marginBottom: 16,
     borderWidth: 1,
     borderColor: COLORS.border,
     borderRadius: 4,
     overflow: "hidden",
+    marginBottom: 12,
   },
   tableHeader: {
     flexDirection: "row",
@@ -188,12 +344,14 @@ const styles = StyleSheet.create({
     borderBottomColor: COLORS.border,
     paddingVertical: 6,
     paddingHorizontal: 8,
+    alignItems: "center",
   },
   tableHeaderCell: {
     fontFamily: "Helvetica-Bold",
     fontSize: 8,
     color: COLORS.muted,
     textTransform: "uppercase",
+    letterSpacing: 0.5,
   },
   tableRow: {
     flexDirection: "row",
@@ -220,21 +378,45 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.bgLight,
     paddingVertical: 6,
     paddingHorizontal: 8,
+    alignItems: "center",
   },
+
+  insightBox: {
+    backgroundColor: COLORS.bgAccent,
+    padding: 10,
+    borderRadius: 4,
+    borderLeftWidth: 3,
+    borderLeftColor: COLORS.primary,
+    marginTop: 6,
+  },
+  insightLabel: {
+    fontSize: 8,
+    color: COLORS.primary,
+    fontFamily: "Helvetica-Bold",
+    textTransform: "uppercase",
+    letterSpacing: 0.8,
+    marginBottom: 2,
+  },
+  insightText: {
+    fontSize: 8.5,
+    color: COLORS.text,
+    lineHeight: 1.3,
+  },
+
   signatureSection: {
-    marginTop: 20,
+    marginTop: 18,
     flexDirection: "row",
     justifyContent: "space-between",
-    paddingHorizontal: 20,
+    paddingHorizontal: 24,
   },
   signatureBox: {
-    width: "40%",
+    width: "42%",
     alignItems: "center",
   },
   signatureRole: {
     fontSize: 8,
     color: COLORS.muted,
-    marginBottom: 44,
+    marginBottom: 36,
   },
   signatureLine: {
     width: "100%",
@@ -247,22 +429,90 @@ const styles = StyleSheet.create({
     fontFamily: "Helvetica-Bold",
     color: COLORS.text,
   },
-  pageNumber: {
+
+  footer: {
     position: "absolute",
-    fontSize: 7.5,
     bottom: 20,
     left: 36,
     right: 36,
-    textAlign: "center",
+    flexDirection: "row",
+    justifyContent: "space-between",
+    fontSize: 7.5,
     color: COLORS.light,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+    paddingTop: 8,
+  },
+  footerText: {
+    color: COLORS.muted,
+  },
+  footerPage: {
+    color: COLORS.muted,
+    fontFamily: "Helvetica-Bold",
   },
 });
+
+// ============================================
+// SUB-COMPONENTS (Aligned with CampaignReport)
+// ============================================
+
+function PageHeader({
+  channelName,
+  channelHandle,
+  pageTitle,
+}: {
+  channelName: string;
+  channelHandle: string;
+  pageTitle: string;
+}) {
+  return (
+    <View style={styles.pageHeader}>
+      <View style={styles.pageHeaderLeft}>
+        <Text style={styles.pageHeaderBrand}>{channelName}</Text>
+        <Text style={styles.pageHeaderHandle}>{channelHandle}</Text>
+      </View>
+      <View style={styles.pageHeaderRight}>
+        <Text style={styles.pageHeaderLabel}>Contribution Plan</Text>
+        <Text style={styles.pageHeaderTitle}>{pageTitle}</Text>
+      </View>
+    </View>
+  );
+}
+
+function PageFooter({
+  channelName,
+  channelHandle,
+}: {
+  channelName: string;
+  channelHandle: string;
+}) {
+  return (
+    <View style={styles.footer} fixed>
+      <Text style={styles.footerText}>
+        {channelName} • {channelHandle} • Internal Fee Distribution
+      </Text>
+      <Text
+        style={styles.footerPage}
+        render={({ pageNumber, totalPages }) =>
+          `Halaman ${pageNumber} dari ${totalPages}`
+        }
+      />
+    </View>
+  );
+}
+
+// ============================================
+// MAIN REPORT COMPONENT
+// ============================================
 
 export function ContributionPlanReportPDF({
   data,
 }: {
   data: ContributionPlanReportData;
 }) {
+  const cn = data.channelConfig?.channelName || "Circle Anak UPN";
+  const ch = data.channelConfig?.channelHandle || "@abangabanganthis";
+
   const formattedDate = new Date(data.date).toLocaleDateString("id-ID", {
     day: "numeric",
     month: "long",
@@ -270,283 +520,691 @@ export function ContributionPlanReportPDF({
   });
 
   return (
-    <Document title={data.title} author="CAU Tools">
-      <Page size="A4" style={styles.page}>
-        {/* Header */}
-        <View style={styles.header}>
-          <View>
-            <Text style={styles.brandTitle}>CAU Tools</Text>
-            <Text style={styles.brandSub}>
-              Internal Dashboard & Contribution Distribution
-            </Text>
-          </View>
-          <View style={styles.headerRight}>
-            <Text style={styles.reportBadge}>CONTRIBUTION PLAN</Text>
-            <Text style={styles.reportDate}>{formattedDate}</Text>
-          </View>
+    <Document
+      title={data.title}
+      author={cn}
+      creator="CAU Contribution Plan Generator"
+    >
+      {/* ============================================
+          PAGE 1 - COVER (Exact same styling as CampaignReport)
+         ============================================ */}
+      <Page size="A4" style={styles.coverPage}>
+        <View style={styles.coverHeader}>
+          <Text>Contribution Plan Report</Text>
+          <Text>{formattedDate}</Text>
         </View>
 
-        {/* Title */}
-        <View style={styles.titleBlock}>
-          <Text style={styles.planTitle}>{data.title}</Text>
-          {data.brandName && (
-            <Text style={styles.brandNameText}>Brand: {data.brandName}</Text>
-          )}
-        </View>
+        <View style={styles.coverMain}>
+          <View style={styles.coverDivider} />
+          <Text style={styles.coverFor}>Internal Allocation Plan</Text>
+          <Text style={styles.coverBrand}>
+            {data.brandName ? data.brandName.toUpperCase() : "CAU TEAM"}
+          </Text>
 
-        {/* Project Total Banner */}
-        <View style={styles.highlightCard}>
-          <View>
-            <Text style={styles.highlightLabel}>Total Nilai Brand Masuk</Text>
-            <Text style={{ fontSize: 8, color: COLORS.muted, marginTop: 2 }}>
-              Alokasi Terbagi: {data.calculation.totalAllocatedPercentage}% (
-              {formatRupiah(data.calculation.totalAllocatedAmount)})
-            </Text>
-          </View>
-          <Text style={styles.highlightValue}>
-            {formatRupiah(data.totalAmount)}
+          <Text style={styles.coverCampaign}>{data.title}</Text>
+          <Text style={styles.coverDate}>
+            Total Nilai: {formatRupiah(data.totalAmount)} • {data.tasks.length} Tahapan Kerja
           </Text>
         </View>
 
-        {/* Metadata & Scheme */}
-        <View style={styles.metaGrid}>
-          {data.objective && (
-            <View style={styles.metaRow}>
-              <Text style={styles.metaLabel}>Objective</Text>
-              <Text style={styles.metaValue}>{data.objective}</Text>
-            </View>
-          )}
-          {data.planType && (
-            <View style={styles.metaRow}>
-              <Text style={styles.metaLabel}>Skema / Type</Text>
-              <Text style={styles.metaValue}>{data.planType}</Text>
-            </View>
-          )}
-          {data.howTo && (
-            <View style={styles.metaRow}>
-              <Text style={styles.metaLabel}>How To</Text>
-              <Text style={styles.metaValue}>{data.howTo}</Text>
-            </View>
-          )}
-          {data.notes && (
-            <View style={{ ...styles.metaRow, marginBottom: 0 }}>
-              <Text style={styles.metaLabel}>Catatan</Text>
-              <Text style={styles.metaValue}>{data.notes}</Text>
-            </View>
-          )}
-        </View>
-
-        {/* Section: Ringkasan Per Orang */}
-        <Text style={styles.sectionHeader}>
-          Ringkasan Pembagian Fee Kontributor
-        </Text>
-        <View style={styles.table}>
-          <View style={styles.tableHeader}>
-            <Text style={{ ...styles.tableHeaderCell, width: "10%" }}>No</Text>
-            <Text style={{ ...styles.tableHeaderCell, width: "40%" }}>
-              Nama Kontributor
-            </Text>
-            <Text
-              style={{
-                ...styles.tableHeaderCell,
-                width: "25%",
-                textAlign: "right",
-              }}
-            >
-              Persentase (%)
-            </Text>
-            <Text
-              style={{
-                ...styles.tableHeaderCell,
-                width: "25%",
-                textAlign: "right",
-              }}
-            >
-              Jumlah Diterima (Rp)
+        <View style={styles.coverFooter}>
+          <View>
+            <Text style={styles.coverChannel}>{cn}</Text>
+            <Text style={styles.coverHandle}>{ch}</Text>
+          </View>
+          <View style={{ alignItems: "flex-end" }}>
+            <Text style={styles.coverHandle}>
+              {data.members.length} Kontributor • Status: {data.status || "ACTIVE"}
             </Text>
           </View>
+        </View>
+      </Page>
 
-          {data.calculation.memberResults.map((m, idx) => (
-            <View
-              key={m.name}
-              style={[
-                styles.tableRow,
-                idx % 2 === 1 ? styles.tableRowAlt : {},
-              ]}
-            >
-              <Text style={{ ...styles.tableCell, width: "10%" }}>
-                {idx + 1}
+      {/* ============================================
+          PAGE 2 - EXECUTIVE SUMMARY & FEE DISTRIBUTION
+         ============================================ */}
+      <Page size="A4" style={styles.page}>
+        <PageHeader
+          channelName={cn}
+          channelHandle={ch}
+          pageTitle="Ringkasan Alokasi & Skema"
+        />
+
+        {/* Section: Total Contract & Allocation */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Total Nilai & Alokasi Brand</Text>
+          <Text style={styles.sectionSubtitle}>
+            Skema pembagian fee tim berdasarkan kontribusi nyata pengerjaan proyek {data.brandName || ""}
+          </Text>
+
+          {/* Hero Stat Box */}
+          <View style={styles.heroStat}>
+            <View style={styles.heroStatLeft}>
+              <Text style={styles.heroStatLabel}>Total Brand Masuk</Text>
+              <Text style={styles.heroStatValue}>{formatRupiah(data.totalAmount)}</Text>
+            </View>
+            <View style={styles.heroStatRight}>
+              <Text style={styles.heroStatTag}>
+                {data.calculation.totalAllocatedPercentage}% Terdistribusi
               </Text>
-              <Text style={{ ...styles.tableCellBold, width: "40%" }}>
-                {m.name}
-              </Text>
-              <Text
-                style={{
-                  ...styles.tableCell,
-                  width: "25%",
-                  textAlign: "right",
-                }}
-              >
-                {m.percentage.toFixed(1).replace(".", ",")}%
-              </Text>
-              <Text
-                style={{
-                  ...styles.tableCellBold,
-                  width: "25%",
-                  textAlign: "right",
-                  color: COLORS.primary,
-                }}
-              >
-                {formatRupiah(m.amount)}
+              {(data.calculation.totalProductionCost || 0) > 0 && (
+                <Text style={{ fontSize: 9, color: COLORS.white, opacity: 0.9, marginTop: 4 }}>
+                  Biaya Produksi: -{formatRupiah(data.calculation.totalProductionCost || 0)}
+                </Text>
+              )}
+            </View>
+          </View>
+
+          {/* 4 Stat Cards */}
+          <View style={styles.statGrid}>
+            <View style={styles.statBox}>
+              <Text style={styles.statLabel}>Fee Dialokasikan</Text>
+              <Text style={styles.statValue}>
+                {formatRupiah(data.calculation.totalAllocatedAmount)}
               </Text>
             </View>
-          ))}
-
-          {/* Sisa / Kas Tim if any */}
-          {data.calculation.unallocatedPercentage > 0 && (
-            <View style={[styles.tableRow, { backgroundColor: "#FFFBEB" }]}>
-              <Text style={{ ...styles.tableCell, width: "10%" }}>-</Text>
-              <Text
-                style={{
-                  ...styles.tableCellBold,
-                  width: "40%",
-                  color: "#B45309",
-                }}
-              >
-                Kas Tim / Unassigned
-              </Text>
-              <Text
-                style={{
-                  ...styles.tableCell,
-                  width: "25%",
-                  textAlign: "right",
-                  color: "#B45309",
-                }}
-              >
-                {data.calculation.unallocatedPercentage
-                  .toFixed(1)
-                  .replace(".", ",")}
-                %
-              </Text>
-              <Text
-                style={{
-                  ...styles.tableCellBold,
-                  width: "25%",
-                  textAlign: "right",
-                  color: "#B45309",
-                }}
-              >
+            <View style={styles.statBox}>
+              <Text style={styles.statLabel}>Sisa / Kas Tim</Text>
+              <Text style={styles.statValue}>
                 {formatRupiah(data.calculation.unallocatedAmount)}
               </Text>
             </View>
-          )}
-
-          {/* Total Footer */}
-          <View style={styles.tableFooterRow}>
-            <Text style={{ ...styles.tableHeaderCell, width: "50%" }}>
-              Total Keseluruhan
-            </Text>
-            <Text
-              style={{
-                ...styles.tableHeaderCell,
-                width: "25%",
-                textAlign: "right",
-              }}
-            >
-              100%
-            </Text>
-            <Text
-              style={{
-                ...styles.tableHeaderCell,
-                width: "25%",
-                textAlign: "right",
-                color: COLORS.primary,
-              }}
-            >
-              {formatRupiah(data.totalAmount)}
-            </Text>
+            <View style={styles.statBox}>
+              <Text style={styles.statLabel}>
+                {(data.calculation.totalProductionCost || 0) > 0
+                  ? "Biaya Produksi"
+                  : "Kontributor"}
+              </Text>
+              <Text style={styles.statValue}>
+                {(data.calculation.totalProductionCost || 0) > 0
+                  ? formatRupiah(data.calculation.totalProductionCost || 0)
+                  : `${data.members.length} Orang`}
+              </Text>
+            </View>
+            <View style={styles.statBox}>
+              <Text style={styles.statLabel}>
+                {(data.calculation.totalProductionCost || 0) > 0
+                  ? "Sisa Brand Bersih"
+                  : "Tahapan Kerja"}
+              </Text>
+              <Text style={styles.statValue}>
+                {(data.calculation.totalProductionCost || 0) > 0
+                  ? formatRupiah(
+                      data.calculation.netBrandAmount ??
+                        data.totalAmount - (data.calculation.totalProductionCost || 0)
+                    )
+                  : `${data.tasks.length} Tahap`}
+              </Text>
+            </View>
           </View>
         </View>
 
-        {/* Section: Action Plan / Skema Detail */}
-        <Text style={styles.sectionHeader}>
-          Rincian Tahapan Kerja (Action Plan)
-        </Text>
-        <View style={styles.table}>
-          <View style={styles.tableHeader}>
-            <Text style={{ ...styles.tableHeaderCell, width: "6%" }}>No</Text>
-            <Text style={{ ...styles.tableHeaderCell, width: "30%" }}>
-              Tahapan (Action Plan)
-            </Text>
-            <Text
-              style={{
-                ...styles.tableHeaderCell,
-                width: "12%",
-                textAlign: "center",
-              }}
-            >
-              Bobot
-            </Text>
-            <Text style={{ ...styles.tableHeaderCell, width: "18%" }}>
-              PIC
-            </Text>
-            <Text style={{ ...styles.tableHeaderCell, width: "34%" }}>
-              Details & Notes
-            </Text>
+        {/* Section: Skema & Metadata */}
+        {(data.objective || data.planType || data.howTo || data.notes) && (
+          <View style={styles.metaBox}>
+            {data.objective && (
+              <View style={styles.metaRow}>
+                <Text style={styles.metaLabel}>Objective</Text>
+                <Text style={styles.metaValue}>{data.objective}</Text>
+              </View>
+            )}
+            {data.planType && (
+              <View style={styles.metaRow}>
+                <Text style={styles.metaLabel}>Skema / Type</Text>
+                <Text style={styles.metaValue}>{data.planType}</Text>
+              </View>
+            )}
+            {data.howTo && (
+              <View style={styles.metaRow}>
+                <Text style={styles.metaLabel}>How To</Text>
+                <Text style={styles.metaValue}>{data.howTo}</Text>
+              </View>
+            )}
+            {data.notes && (
+              <View style={styles.metaRowLast}>
+                <Text style={styles.metaLabel}>Catatan</Text>
+                <Text style={styles.metaValue}>{data.notes}</Text>
+              </View>
+            )}
           </View>
+        )}
 
-          {data.tasks.map((t, idx) => {
-            const picLabel = t.isAllTeam
-              ? "All team"
-              : t.assignees.length > 0
-              ? t.assignees.join(", ")
-              : "-";
-
-            const detailAndNotes = [t.details, t.notes]
-              .filter(Boolean)
-              .join(" | ");
-
-            return (
-              <View
-                key={t.orderNumber}
-                style={[
-                  styles.tableRow,
-                  idx % 2 === 1 ? styles.tableRowAlt : {},
-                ]}
-              >
-                <Text style={{ ...styles.tableCell, width: "6%" }}>
-                  {t.orderNumber}
+        {/* Section: Rincian Biaya Produksi (Jika ada) */}
+        {data.productionCosts && data.productionCosts.length > 0 && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>
+              Rincian Biaya Produksi (Production Cost)
+            </Text>
+            <Text style={styles.sectionSubtitle}>
+              Biaya operasional yang mengurangi pemasukan brand dan langsung diberikan ke orang yang terlibat
+            </Text>
+            <View style={styles.table}>
+              <View style={styles.tableHeader}>
+                <Text style={{ ...styles.tableHeaderCell, width: "6%" }}>No</Text>
+                <Text style={{ ...styles.tableHeaderCell, width: "36%" }}>
+                  Keterangan Pos Biaya
                 </Text>
-                <Text style={{ ...styles.tableCellBold, width: "30%" }}>
-                  {t.title}
+                <Text style={{ ...styles.tableHeaderCell, width: "38%" }}>
+                  Orang yang Terlibat & Rincian
                 </Text>
                 <Text
                   style={{
-                    ...styles.tableCell,
-                    width: "12%",
-                    textAlign: "center",
+                    ...styles.tableHeaderCell,
+                    width: "20%",
+                    textAlign: "right",
                   }}
                 >
-                  {t.weight}%
-                </Text>
-                <Text style={{ ...styles.tableCellBold, width: "18%" }}>
-                  {picLabel}
-                </Text>
-                <Text
-                  style={{
-                    ...styles.tableCell,
-                    width: "34%",
-                    color: COLORS.muted,
-                  }}
-                >
-                  {detailAndNotes || "-"}
+                  Subtotal (Rp)
                 </Text>
               </View>
-            );
-          })}
+
+              {data.productionCosts.map((c, cIdx) => (
+                <View
+                  key={cIdx}
+                  style={[
+                    styles.tableRow,
+                    cIdx % 2 === 1 ? styles.tableRowAlt : {},
+                  ]}
+                >
+                  <Text style={{ ...styles.tableCell, width: "6%" }}>
+                    {cIdx + 1}
+                  </Text>
+                  <Text style={{ ...styles.tableCellBold, width: "36%" }}>
+                    {c.notes || `Pos Biaya #${cIdx + 1}`}
+                  </Text>
+                  <Text style={{ ...styles.tableCell, width: "38%" }}>
+                    {c.splits && c.splits.length > 0
+                      ? c.splits
+                          .map(
+                            (s) =>
+                              `${s.memberName || "Eksternal"}: ${formatRupiah(
+                                s.amount
+                              )}`
+                          )
+                          .join(", ")
+                      : "-"}
+                  </Text>
+                  <Text
+                    style={{
+                      ...styles.tableCellBold,
+                      width: "20%",
+                      textAlign: "right",
+                      color: COLORS.primary,
+                    }}
+                  >
+                    {formatRupiah(c.totalAmount)}
+                  </Text>
+                </View>
+              ))}
+
+              <View style={styles.tableFooterRow}>
+                <Text style={{ ...styles.tableHeaderCell, width: "80%" }}>
+                  Total Biaya Produksi
+                </Text>
+                <Text
+                  style={{
+                    ...styles.tableHeaderCell,
+                    width: "20%",
+                    textAlign: "right",
+                    color: COLORS.primary,
+                  }}
+                >
+                  {formatRupiah(data.calculation.totalProductionCost || 0)}
+                </Text>
+              </View>
+            </View>
+          </View>
+        )}
+
+        {/* Section: Ringkasan Fee Kontributor Table */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Ringkasan Pembagian Fee Kontributor</Text>
+          <Text style={styles.sectionSubtitle}>
+            Persentase dan estimasi hak pembagian fee per individu
+          </Text>
+
+          <View style={styles.table}>
+            {(data.calculation.totalProductionCost || 0) > 0 ? (
+              <>
+                <View style={styles.tableHeader}>
+                  <Text style={{ ...styles.tableHeaderCell, width: "6%" }}>No</Text>
+                  <Text style={{ ...styles.tableHeaderCell, width: "30%" }}>
+                    Nama Kontributor
+                  </Text>
+                  <Text
+                    style={{
+                      ...styles.tableHeaderCell,
+                      width: "16%",
+                      textAlign: "center",
+                    }}
+                  >
+                    Persentase (%)
+                  </Text>
+                  <Text
+                    style={{
+                      ...styles.tableHeaderCell,
+                      width: "16%",
+                      textAlign: "right",
+                    }}
+                  >
+                    Fee Persen
+                  </Text>
+                  <Text
+                    style={{
+                      ...styles.tableHeaderCell,
+                      width: "16%",
+                      textAlign: "right",
+                    }}
+                  >
+                    Biaya Prod.
+                  </Text>
+                  <Text
+                    style={{
+                      ...styles.tableHeaderCell,
+                      width: "16%",
+                      textAlign: "right",
+                    }}
+                  >
+                    Total Diterima
+                  </Text>
+                </View>
+
+                {data.calculation.memberResults.map((m, idx) => (
+                  <View
+                    key={m.name}
+                    style={[
+                      styles.tableRow,
+                      idx % 2 === 1 ? styles.tableRowAlt : {},
+                    ]}
+                  >
+                    <Text style={{ ...styles.tableCell, width: "6%" }}>
+                      {idx + 1}
+                    </Text>
+                    <Text style={{ ...styles.tableCellBold, width: "30%" }}>
+                      {m.name}
+                    </Text>
+                    <Text
+                      style={{
+                        ...styles.tableCell,
+                        width: "16%",
+                        textAlign: "center",
+                      }}
+                    >
+                      {m.percentage.toFixed(1).replace(".", ",")}%
+                    </Text>
+                    <Text
+                      style={{
+                        ...styles.tableCell,
+                        width: "16%",
+                        textAlign: "right",
+                      }}
+                    >
+                      {formatRupiah(m.feeFromPercentage ?? 0)}
+                    </Text>
+                    <Text
+                      style={{
+                        ...styles.tableCell,
+                        width: "16%",
+                        textAlign: "right",
+                      }}
+                    >
+                      {(m.productionCost || 0) > 0
+                        ? `+${formatRupiah(m.productionCost || 0)}`
+                        : "-"}
+                    </Text>
+                    <Text
+                      style={{
+                        ...styles.tableCellBold,
+                        width: "16%",
+                        textAlign: "right",
+                        color: COLORS.primary,
+                      }}
+                    >
+                      {formatRupiah(m.amount)}
+                    </Text>
+                  </View>
+                ))}
+
+                {/* Unallocated / Kas Tim row */}
+                {data.calculation.unallocatedPercentage > 0 && (
+                  <View style={[styles.tableRow, { backgroundColor: COLORS.warningBg }]}>
+                    <Text style={{ ...styles.tableCell, width: "6%" }}>-</Text>
+                    <Text
+                      style={{
+                        ...styles.tableCellBold,
+                        width: "30%",
+                        color: COLORS.warningText,
+                      }}
+                    >
+                      Kas Tim / Unassigned
+                    </Text>
+                    <Text
+                      style={{
+                        ...styles.tableCell,
+                        width: "16%",
+                        textAlign: "center",
+                        color: COLORS.warningText,
+                      }}
+                    >
+                      {data.calculation.unallocatedPercentage
+                        .toFixed(1)
+                        .replace(".", ",")}
+                      %
+                    </Text>
+                    <Text
+                      style={{
+                        ...styles.tableCell,
+                        width: "16%",
+                        textAlign: "right",
+                        color: COLORS.warningText,
+                      }}
+                    >
+                      {formatRupiah(data.calculation.unallocatedAmount)}
+                    </Text>
+                    <Text
+                      style={{
+                        ...styles.tableCell,
+                        width: "16%",
+                        textAlign: "right",
+                        color: COLORS.warningText,
+                      }}
+                    >
+                      -
+                    </Text>
+                    <Text
+                      style={{
+                        ...styles.tableCellBold,
+                        width: "16%",
+                        textAlign: "right",
+                        color: COLORS.warningText,
+                      }}
+                    >
+                      {formatRupiah(data.calculation.unallocatedAmount)}
+                    </Text>
+                  </View>
+                )}
+
+                {/* Table Footer Total */}
+                <View style={styles.tableFooterRow}>
+                  <Text style={{ ...styles.tableHeaderCell, width: "36%" }}>
+                    Total Keseluruhan
+                  </Text>
+                  <Text
+                    style={{
+                      ...styles.tableHeaderCell,
+                      width: "16%",
+                      textAlign: "center",
+                    }}
+                  >
+                    100%
+                  </Text>
+                  <Text
+                    style={{
+                      ...styles.tableHeaderCell,
+                      width: "16%",
+                      textAlign: "right",
+                    }}
+                  >
+                    {formatRupiah(data.calculation.totalAllocatedAmount)}
+                  </Text>
+                  <Text
+                    style={{
+                      ...styles.tableHeaderCell,
+                      width: "16%",
+                      textAlign: "right",
+                    }}
+                  >
+                    +{formatRupiah(data.calculation.totalProductionCost || 0)}
+                  </Text>
+                  <Text
+                    style={{
+                      ...styles.tableHeaderCell,
+                      width: "16%",
+                      textAlign: "right",
+                      color: COLORS.primary,
+                    }}
+                  >
+                    {formatRupiah(data.calculation.totalDistributedAmount || data.totalAmount)}
+                  </Text>
+                </View>
+              </>
+            ) : (
+              <>
+                <View style={styles.tableHeader}>
+                  <Text style={{ ...styles.tableHeaderCell, width: "8%" }}>No</Text>
+                  <Text style={{ ...styles.tableHeaderCell, width: "42%" }}>
+                    Nama Kontributor
+                  </Text>
+                  <Text
+                    style={{
+                      ...styles.tableHeaderCell,
+                      width: "25%",
+                      textAlign: "right",
+                    }}
+                  >
+                    Persentase (%)
+                  </Text>
+                  <Text
+                    style={{
+                      ...styles.tableHeaderCell,
+                      width: "25%",
+                      textAlign: "right",
+                    }}
+                  >
+                    Fee Diterima (Rp)
+                  </Text>
+                </View>
+
+                {data.calculation.memberResults.map((m, idx) => (
+                  <View
+                    key={m.name}
+                    style={[
+                      styles.tableRow,
+                      idx % 2 === 1 ? styles.tableRowAlt : {},
+                    ]}
+                  >
+                    <Text style={{ ...styles.tableCell, width: "8%" }}>
+                      {idx + 1}
+                    </Text>
+                    <Text style={{ ...styles.tableCellBold, width: "42%" }}>
+                      {m.name}
+                    </Text>
+                    <Text
+                      style={{
+                        ...styles.tableCell,
+                        width: "25%",
+                        textAlign: "right",
+                      }}
+                    >
+                      {m.percentage.toFixed(1).replace(".", ",")}%
+                    </Text>
+                    <Text
+                      style={{
+                        ...styles.tableCellBold,
+                        width: "25%",
+                        textAlign: "right",
+                        color: COLORS.primary,
+                      }}
+                    >
+                      {formatRupiah(m.amount)}
+                    </Text>
+                  </View>
+                ))}
+
+                {/* Unallocated / Kas Tim row */}
+                {data.calculation.unallocatedPercentage > 0 && (
+                  <View style={[styles.tableRow, { backgroundColor: COLORS.warningBg }]}>
+                    <Text style={{ ...styles.tableCell, width: "8%" }}>-</Text>
+                    <Text
+                      style={{
+                        ...styles.tableCellBold,
+                        width: "42%",
+                        color: COLORS.warningText,
+                      }}
+                    >
+                      Kas Tim / Unassigned
+                    </Text>
+                    <Text
+                      style={{
+                        ...styles.tableCell,
+                        width: "25%",
+                        textAlign: "right",
+                        color: COLORS.warningText,
+                      }}
+                    >
+                      {data.calculation.unallocatedPercentage
+                        .toFixed(1)
+                        .replace(".", ",")}
+                      %
+                    </Text>
+                    <Text
+                      style={{
+                        ...styles.tableCellBold,
+                        width: "25%",
+                        textAlign: "right",
+                        color: COLORS.warningText,
+                      }}
+                    >
+                      {formatRupiah(data.calculation.unallocatedAmount)}
+                    </Text>
+                  </View>
+                )}
+
+                {/* Table Footer Total */}
+                <View style={styles.tableFooterRow}>
+                  <Text style={{ ...styles.tableHeaderCell, width: "50%" }}>
+                    Total Keseluruhan
+                  </Text>
+                  <Text
+                    style={{
+                      ...styles.tableHeaderCell,
+                      width: "25%",
+                      textAlign: "right",
+                    }}
+                  >
+                    100%
+                  </Text>
+                  <Text
+                    style={{
+                      ...styles.tableHeaderCell,
+                      width: "25%",
+                      textAlign: "right",
+                      color: COLORS.primary,
+                    }}
+                  >
+                    {formatRupiah(data.totalAmount)}
+                  </Text>
+                </View>
+              </>
+            )}
+          </View>
         </View>
 
-        {/* Signature */}
+        {/* Key Principle Box */}
+        <View style={styles.insightBox}>
+          <Text style={styles.insightLabel}>Prinsip Kontribusi</Text>
+          <Text style={styles.insightText}>
+            Skema pembagian fee di atas dihitung proporsional sesuai dengan bobot tahapan kerja yang disepakati bersama. Setiap kontributor bertanggung jawab menyelesaikan tahapan kerja yang telah dialokasikan.
+          </Text>
+        </View>
+
+        <PageFooter channelName={cn} channelHandle={ch} />
+      </Page>
+
+      {/* ============================================
+          PAGE 3 - ACTION PLAN & APPROVAL
+         ============================================ */}
+      <Page size="A4" style={styles.page}>
+        <PageHeader
+          channelName={cn}
+          channelHandle={ch}
+          pageTitle="Rincian Tahapan Kerja"
+        />
+
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>
+            13 Tahapan Kerja Standar CAU (Action Plan)
+          </Text>
+          <Text style={styles.sectionSubtitle}>
+            Rincian bobot kerja, penanggung jawab (PIC), dan detail operasional setiap tahapan
+          </Text>
+
+          <View style={styles.table}>
+            <View style={styles.tableHeader}>
+              <Text style={{ ...styles.tableHeaderCell, width: "6%" }}>No</Text>
+              <Text style={{ ...styles.tableHeaderCell, width: "30%" }}>
+                Tahapan (Action Plan)
+              </Text>
+              <Text
+                style={{
+                  ...styles.tableHeaderCell,
+                  width: "12%",
+                  textAlign: "center",
+                }}
+              >
+                Bobot
+              </Text>
+              <Text style={{ ...styles.tableHeaderCell, width: "18%" }}>
+                PIC
+              </Text>
+              <Text style={{ ...styles.tableHeaderCell, width: "34%" }}>
+                Rincian & Catatan
+              </Text>
+            </View>
+
+            {data.tasks.map((t, idx) => {
+              const picLabel = t.isAllTeam
+                ? "All team"
+                : t.assignees.length > 0
+                ? t.assignees.join(", ")
+                : "-";
+
+              const detailAndNotes = [t.details, t.notes]
+                .filter(Boolean)
+                .join(" | ");
+
+              return (
+                <View
+                  key={t.orderNumber}
+                  style={[
+                    styles.tableRow,
+                    idx % 2 === 1 ? styles.tableRowAlt : {},
+                  ]}
+                >
+                  <Text style={{ ...styles.tableCell, width: "6%" }}>
+                    {t.orderNumber}
+                  </Text>
+                  <Text style={{ ...styles.tableCellBold, width: "30%" }}>
+                    {t.title}
+                  </Text>
+                  <Text
+                    style={{
+                      ...styles.tableCell,
+                      width: "12%",
+                      textAlign: "center",
+                    }}
+                  >
+                    {t.weight}%
+                  </Text>
+                  <Text style={{ ...styles.tableCellBold, width: "18%" }}>
+                    {picLabel}
+                  </Text>
+                  <Text
+                    style={{
+                      ...styles.tableCell,
+                      width: "34%",
+                      color: COLORS.muted,
+                    }}
+                  >
+                    {detailAndNotes || "-"}
+                  </Text>
+                </View>
+              );
+            })}
+          </View>
+        </View>
+
+        {/* Approval Signatures */}
         <View style={styles.signatureSection}>
           <View style={styles.signatureBox}>
             <Text style={styles.signatureRole}>Dibuat & Dikoordinasikan</Text>
@@ -560,11 +1218,7 @@ export function ContributionPlanReportPDF({
           </View>
         </View>
 
-        {/* Page Footer */}
-        <Text style={styles.pageNumber}>
-          Dokumen ini digenerate secara otomatis oleh CAU Tools Dashboard •{" "}
-          {formattedDate}
-        </Text>
+        <PageFooter channelName={cn} channelHandle={ch} />
       </Page>
     </Document>
   );

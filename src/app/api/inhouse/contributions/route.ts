@@ -25,12 +25,21 @@ export async function GET() {
         tasks: {
           orderBy: { orderNumber: "asc" },
         },
+        productionCosts: {
+          orderBy: { createdAt: "asc" },
+        },
       },
     });
 
     const serializedPlans = plans.map((p) => ({
       ...p,
       totalAmount: Number(p.totalAmount),
+      productionCosts: (p.productionCosts || []).map((c) => ({
+        id: c.id,
+        notes: c.notes || "",
+        totalAmount: Number(c.totalAmount),
+        splits: Array.isArray(c.splits) ? c.splits : [],
+      })),
     }));
 
     return NextResponse.json({ plans: serializedPlans });
