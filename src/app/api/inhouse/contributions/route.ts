@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
+import { Role } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { getSessionOrThrow, handleAuthError } from "@/lib/auth-helpers";
+import { getSessionOrThrow, requireRole, handleAuthError } from "@/lib/auth-helpers";
 import { createLogger } from "@/lib/logger";
 import {
   DEFAULT_CONTRIBUTION_TASKS,
@@ -44,7 +45,8 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   try {
-    await getSessionOrThrow();
+    const session = await getSessionOrThrow();
+    requireRole(session, [Role.ADMIN, Role.EDITOR]);
     const body = await req.json();
 
     const {

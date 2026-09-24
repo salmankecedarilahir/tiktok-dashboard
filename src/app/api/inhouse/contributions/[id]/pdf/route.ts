@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
+import { Role } from "@prisma/client";
 import { renderToStream } from "@react-pdf/renderer";
 
 import { prisma } from "@/lib/prisma";
 import { createLogger } from "@/lib/logger";
-import { getSessionOrThrow, handleAuthError } from "@/lib/auth-helpers";
+import { getSessionOrThrow, requireRole, handleAuthError } from "@/lib/auth-helpers";
 import {
   ContributionPlanReportPDF,
   ContributionPlanReportData,
@@ -17,7 +18,8 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await getSessionOrThrow();
+    const session = await getSessionOrThrow();
+    requireRole(session, [Role.ADMIN, Role.EDITOR]);
     const { id } = await params;
 
     const plan = await prisma.contributionPlan.findUnique({
