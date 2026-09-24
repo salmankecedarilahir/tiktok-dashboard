@@ -24,6 +24,9 @@ export async function GET(
         tasks: {
           orderBy: { orderNumber: "asc" },
         },
+        productionCosts: {
+          orderBy: { createdAt: "asc" },
+        },
       },
     });
 
@@ -35,6 +38,15 @@ export async function GET(
     }
 
     const totalAmount = Number(plan.totalAmount);
+    const serializedProductionCosts = (plan.productionCosts || []).map((c) => ({
+      id: c.id,
+      notes: c.notes || "",
+      totalAmount: Number(c.totalAmount),
+      splits: Array.isArray(c.splits) ? c.splits : [],
+      createdAt: c.createdAt.toISOString(),
+      updatedAt: c.updatedAt.toISOString(),
+    }));
+
     const calculation = calculateContribution(
       totalAmount,
       plan.members.map((m) => ({ name: m.name, userId: m.userId })),
@@ -43,13 +55,15 @@ export async function GET(
         weight: t.weight,
         isAllTeam: t.isAllTeam,
         assignees: t.assignees,
-      }))
+      })),
+      serializedProductionCosts
     );
 
     return NextResponse.json({
       plan: {
         ...plan,
         totalAmount,
+        productionCosts: serializedProductionCosts,
       },
       calculation,
     });
@@ -95,9 +109,10 @@ export async function PUT(
       status,
       members,
       tasks,
+      productionCosts,
     } = body;
 
-    // Use a transaction to update plan, delete old members/tasks, and recreate them
+    // Use a transaction to update plan, delete old members/tasks/costs, and recreate them
     await prisma.$transaction(async (tx) => {
       // 1. Update main plan fields
       await tx.contributionPlan.update({
@@ -175,6 +190,50 @@ export async function PUT(
           });
         }
       }
+
+      // 4. If productionCosts are passed, replace them
+      if (Array.isArray(productionCosts)) {
+        await tx.contributionProductionCost.deleteMany({
+          where: { planId: id },
+        });
+
+        if (productionCosts.length > 0) {
+          await tx.contributionProductionCost.createMany({
+            data: productionCosts.map(
+              (c: {
+                notes?: string | null;
+                totalAmount?: number | bigint;
+                splits?: Array<{
+                  memberName?: string;
+                  amount?: number;
+                  notes?: string;
+                }>;
+              }) => {
+                const splits = Array.isArray(c.splits) ? c.splits : [];
+                const computedTotal = splits.reduce(
+                  (sum: number, s) => sum + (Number(s.amount) || 0),
+                  0
+                );
+                const finalAmount =
+                  splits.length > 0
+                    ? computedTotal
+                    : Number(c.totalAmount) || 0;
+
+                return {
+                  planId: id,
+                  notes: c.notes || "",
+                  totalAmount: BigInt(Math.max(0, Math.round(finalAmount))),
+                  splits: splits.map((s) => ({
+                    memberName: String(s.memberName || "").trim(),
+                    amount: Math.max(0, Math.round(Number(s.amount) || 0)),
+                    notes: s.notes ? String(s.notes) : "",
+                  })),
+                };
+              }
+            ),
+          });
+        }
+      }
     });
 
     const updated = await prisma.contributionPlan.findUnique({
@@ -182,10 +241,20 @@ export async function PUT(
       include: {
         members: { orderBy: { name: "asc" } },
         tasks: { orderBy: { orderNumber: "asc" } },
+        productionCosts: { orderBy: { createdAt: "asc" } },
       },
     });
 
     const numericTotal = Number(updated?.totalAmount ?? 0);
+    const serializedProductionCosts = (updated?.productionCosts || []).map((c) => ({
+      id: c.id,
+      notes: c.notes || "",
+      totalAmount: Number(c.totalAmount),
+      splits: Array.isArray(c.splits) ? c.splits : [],
+      createdAt: c.createdAt.toISOString(),
+      updatedAt: c.updatedAt.toISOString(),
+    }));
+
     const calculation = updated
       ? calculateContribution(
           numericTotal,
@@ -195,7 +264,8 @@ export async function PUT(
             weight: t.weight,
             isAllTeam: t.isAllTeam,
             assignees: t.assignees,
-          }))
+          })),
+          serializedProductionCosts
         )
       : null;
 
@@ -205,6 +275,7 @@ export async function PUT(
       plan: {
         ...updated,
         totalAmount: numericTotal,
+        productionCosts: serializedProductionCosts,
       },
       calculation,
     });

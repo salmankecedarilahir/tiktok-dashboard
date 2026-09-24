@@ -31,6 +31,21 @@ export async function GET(
       return NextResponse.json({ error: "Campaign not found" }, { status: 404 });
     }
 
+    const contributionPlan = await prisma.contributionPlan.findFirst({
+      where: {
+        brandName: campaign.brandName,
+        title: { contains: campaign.campaignName },
+      },
+      select: {
+        id: true,
+        title: true,
+        status: true,
+        totalAmount: true,
+        createdAt: true,
+      },
+      orderBy: { createdAt: "desc" },
+    });
+
     return NextResponse.json({
       campaign: {
         ...campaign,
@@ -38,6 +53,13 @@ export async function GET(
         endDate: campaign.endDate.toISOString(),
         createdAt: campaign.createdAt.toISOString(),
         updatedAt: campaign.updatedAt.toISOString(),
+        contributionPlan: contributionPlan
+          ? {
+              ...contributionPlan,
+              totalAmount: Number(contributionPlan.totalAmount),
+              createdAt: contributionPlan.createdAt.toISOString(),
+            }
+          : null,
         videos: campaign.videos.map((v) => ({
           ...v,
           views: Number(v.views),
@@ -60,7 +82,7 @@ export async function GET(
 }
 
 export async function DELETE(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
@@ -68,11 +90,52 @@ export async function DELETE(
     requireRole(session, [Role.ADMIN, Role.EDITOR]);
     const { id } = await params;
 
-    await prisma.campaign.delete({ where: { id } });
+    const shouldDeletePlan = req.nextUrl.searchParams.get("deleteContributionPlan") === "true";
 
-    log.info({ id }, "Deleted campaign");
+    const campaign = await prisma.campaign.findUnique({
+      where: { id },
+      select: { id: true, brandName: true, campaignName: true },
+    });
 
-    return NextResponse.json({ success: true });
+    if (!campaign) {
+      return NextResponse.json({ error: "Campaign not found" }, { status: 404 });
+    }
+
+    let deletedPlanCount = 0;
+
+    await prisma.$transaction(async (tx) => {
+      if (shouldDeletePlan) {
+        const plans = await tx.contributionPlan.findMany({
+          where: {
+            brandName: campaign.brandName,
+            title: { contains: campaign.campaignName },
+          },
+          select: { id: true },
+        });
+
+        if (plans.length > 0) {
+          const deleteResult = await tx.contributionPlan.deleteMany({
+            where: {
+              id: { in: plans.map((p) => p.id) },
+            },
+          });
+          deletedPlanCount = deleteResult.count;
+        }
+      }
+
+      await tx.campaign.delete({ where: { id } });
+    });
+
+    log.info(
+      { id, brand: campaign.brandName, shouldDeletePlan, deletedPlanCount },
+      "Deleted campaign"
+    );
+
+    return NextResponse.json({
+      success: true,
+      deletedContributionPlan: shouldDeletePlan && deletedPlanCount > 0,
+      deletedPlanCount,
+    });
   } catch (err) {
     const authResp = handleAuthError(err);
     if (authResp) return authResp;
