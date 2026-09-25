@@ -24,27 +24,21 @@ export async function GET(
         videos: {
           orderBy: { postedAt: "desc" },
         },
+        contributionPlan: {
+          select: {
+            id: true,
+            title: true,
+            status: true,
+            totalAmount: true,
+            createdAt: true,
+          },
+        },
       },
     });
 
     if (!campaign) {
       return NextResponse.json({ error: "Campaign not found" }, { status: 404 });
     }
-
-    const contributionPlan = await prisma.contributionPlan.findFirst({
-      where: {
-        brandName: campaign.brandName,
-        title: { contains: campaign.campaignName },
-      },
-      select: {
-        id: true,
-        title: true,
-        status: true,
-        totalAmount: true,
-        createdAt: true,
-      },
-      orderBy: { createdAt: "desc" },
-    });
 
     return NextResponse.json({
       campaign: {
@@ -53,11 +47,11 @@ export async function GET(
         endDate: campaign.endDate.toISOString(),
         createdAt: campaign.createdAt.toISOString(),
         updatedAt: campaign.updatedAt.toISOString(),
-        contributionPlan: contributionPlan
+        contributionPlan: campaign.contributionPlan
           ? {
-              ...contributionPlan,
-              totalAmount: Number(contributionPlan.totalAmount),
-              createdAt: contributionPlan.createdAt.toISOString(),
+              ...campaign.contributionPlan,
+              totalAmount: Number(campaign.contributionPlan.totalAmount),
+              createdAt: campaign.contributionPlan.createdAt.toISOString(),
             }
           : null,
         videos: campaign.videos.map((v) => ({
@@ -94,7 +88,7 @@ export async function DELETE(
 
     const campaign = await prisma.campaign.findUnique({
       where: { id },
-      select: { id: true, brandName: true, campaignName: true },
+      select: { id: true, brandName: true },
     });
 
     if (!campaign) {
@@ -105,22 +99,10 @@ export async function DELETE(
 
     await prisma.$transaction(async (tx) => {
       if (shouldDeletePlan) {
-        const plans = await tx.contributionPlan.findMany({
-          where: {
-            brandName: campaign.brandName,
-            title: { contains: campaign.campaignName },
-          },
-          select: { id: true },
+        const deleteResult = await tx.contributionPlan.deleteMany({
+          where: { campaignId: id },
         });
-
-        if (plans.length > 0) {
-          const deleteResult = await tx.contributionPlan.deleteMany({
-            where: {
-              id: { in: plans.map((p) => p.id) },
-            },
-          });
-          deletedPlanCount = deleteResult.count;
-        }
+        deletedPlanCount = deleteResult.count;
       }
 
       await tx.campaign.delete({ where: { id } });

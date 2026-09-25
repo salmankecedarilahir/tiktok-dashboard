@@ -9,9 +9,27 @@ import {
   ContributionPlanReportPDF,
   ContributionPlanReportData,
 } from "@/components/pdf/ContributionPlanReport";
-import { calculateContribution } from "@/lib/contribution-template";
+import { calculateContribution, type ProductionCostSplit } from "@/lib/contribution-template";
 
 const log = createLogger({ module: "api/inhouse/contributions/[id]/pdf" });
+
+function parseProductionCostSplits(value: unknown): ProductionCostSplit[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((item) => {
+    if (!item || typeof item !== "object" || Array.isArray(item)) return [];
+    const split = item as Record<string, unknown>;
+    if (
+      typeof split.memberName !== "string" ||
+      typeof split.amount !== "number" ||
+      !Number.isFinite(split.amount)
+    ) return [];
+    return [{
+      memberName: split.memberName,
+      amount: split.amount,
+      notes: typeof split.notes === "string" ? split.notes : undefined,
+    }];
+  });
+}
 
 export async function GET(
   _req: NextRequest,
@@ -43,7 +61,7 @@ export async function GET(
       id: c.id,
       notes: c.notes || "",
       totalAmount: Number(c.totalAmount),
-      splits: Array.isArray(c.splits) ? c.splits : [],
+      splits: parseProductionCostSplits(c.splits),
       createdAt: c.createdAt.toISOString(),
       updatedAt: c.updatedAt.toISOString(),
     }));
@@ -94,7 +112,7 @@ export async function GET(
       productionCosts: serializedProductionCosts.map((c) => ({
         notes: c.notes,
         totalAmount: c.totalAmount,
-        splits: Array.isArray(c.splits) ? (c.splits as any) : [],
+        splits: c.splits,
       })),
       calculation: {
         totalProductionCost: calculation.totalProductionCost,

@@ -80,7 +80,6 @@ interface PlanData {
 }
 
 export function ContributionEditorClient({ planId }: { planId: string }) {
-  const [plan, setPlan] = useState<PlanData | null>(null);
   const [systemUsers, setSystemUsers] = useState<SystemUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -120,7 +119,6 @@ export function ContributionEditorClient({ planId }: { planId: string }) {
       }
 
       const p = planJson.plan as PlanData;
-      setPlan(p);
       setTitle(p.title || "");
       setBrandName(p.brandName || "");
       setTotalAmount(p.totalAmount || 0);
@@ -140,7 +138,13 @@ export function ContributionEditorClient({ planId }: { planId: string }) {
   }, [planId]);
 
   useEffect(() => {
-    loadData();
+    let active = true;
+    queueMicrotask(() => {
+      if (active) void loadData();
+    });
+    return () => {
+      active = false;
+    };
   }, [loadData]);
 
   // Real-time calculation whenever members, tasks, productionCosts, or totalAmount change

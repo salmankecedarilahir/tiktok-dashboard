@@ -27,24 +27,13 @@ export async function GET() {
     const campaigns = await prisma.campaign.findMany({
       include: {
         _count: { select: { videos: true } },
+        contributionPlan: { select: { id: true, title: true, status: true } },
       },
       orderBy: { createdAt: "desc" },
     });
 
-    const contributionPlans = await prisma.contributionPlan.findMany({
-      select: { id: true, title: true, brandName: true, status: true },
-      orderBy: { createdAt: "desc" },
-    });
-
     return NextResponse.json({
-      campaigns: campaigns.map((c) => {
-        const matchingPlan = contributionPlans.find(
-          (p) =>
-            p.brandName?.toLowerCase() === c.brandName.toLowerCase() &&
-            p.title.toLowerCase().includes(c.campaignName.toLowerCase())
-        );
-
-        return {
+      campaigns: campaigns.map((c) => ({
           id: c.id,
           brandName: c.brandName,
           brandLogoUrl: c.brandLogoUrl,
@@ -55,15 +44,8 @@ export async function GET() {
           notes: c.notes,
           videoCount: c._count.videos,
           createdAt: c.createdAt.toISOString(),
-          contributionPlan: matchingPlan
-            ? {
-                id: matchingPlan.id,
-                title: matchingPlan.title,
-                status: matchingPlan.status,
-              }
-            : null,
-        };
-      }),
+          contributionPlan: c.contributionPlan,
+      })),
     });
   } catch (err) {
     const authResp = handleAuthError(err);
@@ -105,6 +87,7 @@ export async function POST(req: NextRequest) {
       });
 
       const contributionPlan = await createDraftContributionPlanForCampaign({
+        campaignId: campaign.id,
         brandName: parsed.brandName,
         campaignName: parsed.campaignName,
         totalAmount: 0,
