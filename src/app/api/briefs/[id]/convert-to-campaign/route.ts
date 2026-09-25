@@ -59,6 +59,7 @@ export async function POST(
 
       // Auto-create draft Contribution Plan for this campaign
       const contributionPlan = await createDraftContributionPlanForCampaign({
+        campaignId: campaign.id,
         brandName: brief.brandName,
         campaignName: brief.campaignName!,
         totalAmount: brief.customPrice ?? 0,

@@ -372,7 +372,7 @@ function allocateIntegers(total: number, weights: number[]): number[] {
   const floors = exacts.map((e) => Math.floor(e));
   const remainders = exacts.map((e, i) => ({ index: i, rem: e - (floors[i] ?? 0) }));
 
-  let diff = total - floors.reduce((a, b) => a + b, 0);
+  const diff = total - floors.reduce((a, b) => a + b, 0);
 
   // Distribute the remaining units to the largest fractional remainders
   remainders.sort((a, b) => b.rem - a.rem);

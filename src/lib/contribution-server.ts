@@ -8,6 +8,7 @@ import {
 } from "@/lib/contribution-template";
 
 export interface CreateDraftPlanOptions {
+  campaignId: string;
   brandName: string;
   campaignName: string;
   totalAmount?: number | bigint | null;
@@ -21,6 +22,7 @@ export interface CreateDraftPlanOptions {
  * or when a brand deal/brief is converted into an active campaign.
  */
 export async function createDraftContributionPlanForCampaign({
+  campaignId,
   brandName,
   campaignName,
   totalAmount = 0,
@@ -69,6 +71,7 @@ export async function createDraftContributionPlanForCampaign({
   // 3. Create the Draft Contribution Plan
   const plan = await db.contributionPlan.create({
     data: {
+      campaignId,
       title: planTitle,
       brandName,
       totalAmount: BigInt(rawAmount),
