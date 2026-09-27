@@ -117,7 +117,8 @@ export function InhouseClient({
   }, [month, year]);
 
   useEffect(() => {
-    load();
+    const timer = window.setTimeout(() => void load(), 0);
+    return () => window.clearTimeout(timer);
   }, [load]);
 
   async function handleGeneratePdf(report: InhouseWeeklyReportSummary) {
@@ -279,7 +280,7 @@ export function InhouseClient({
               {videos.length === 0 ? (
                 <Card>
                   <CardContent className="p-6 text-center text-sm text-muted-foreground">
-                    Belum ada video di week ini. Klik "Tambah Video" untuk mulai.
+                    Belum ada video di week ini. Klik &quot;Tambah Video&quot; untuk mulai.
                   </CardContent>
                 </Card>
               ) : (
@@ -328,8 +329,8 @@ export function InhouseClient({
           <AlertDialogHeader>
             <AlertDialogTitle>Hapus video?</AlertDialogTitle>
             <AlertDialogDescription>
-              Video "
-              {deleteTarget?.caption?.trim() || "Untitled Video"}" akan dihapus
+              Video &quot;
+              {deleteTarget?.caption?.trim() || "Untitled Video"}&quot; akan dihapus
               permanen. Aksi ini tidak bisa dibatalkan.
             </AlertDialogDescription>
           </AlertDialogHeader>

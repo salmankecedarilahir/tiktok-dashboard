@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -61,13 +61,6 @@ export function InhouseWeekSummaryDialog({
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    if (open) {
-      setSummary(weeklyReport.weekSummary ?? "");
-      setError(null);
-    }
-  }, [open, weeklyReport.weekSummary]);
-
   const range = getWeekDateRange(weekNumber, month, year);
   const monthName = MONTH_NAMES[month - 1] ?? "";
   const rangeLabel =
@@ -106,7 +99,7 @@ export function InhouseWeekSummaryDialog({
             Evaluasi Week {weekNumber} — {rangeLabel}
           </DialogTitle>
           <DialogDescription>
-            Evaluasi keseluruhan week ini. Tampil di bagian "Evaluasi Mingguan" pada PDF report.
+            Evaluasi keseluruhan week ini. Tampil di bagian &quot;Evaluasi Mingguan&quot; pada PDF report.
           </DialogDescription>
         </DialogHeader>
 
