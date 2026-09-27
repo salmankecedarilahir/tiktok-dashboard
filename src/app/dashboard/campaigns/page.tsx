@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -46,7 +46,7 @@ export default function CampaignsPage() {
   const [deletePlanChecked, setDeletePlanChecked] = useState(true);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  async function loadCampaigns() {
+  const loadCampaigns = useCallback(async () => {
     try {
       const res = await fetch("/api/campaigns");
       const data = await res.json();
@@ -57,11 +57,12 @@ export default function CampaignsPage() {
     } finally {
       setLoading(false);
     }
-  }
+  }, []);
 
   useEffect(() => {
-    loadCampaigns();
-  }, []);
+    const timer = window.setTimeout(() => void loadCampaigns(), 0);
+    return () => window.clearTimeout(timer);
+  }, [loadCampaigns]);
 
   function openDeleteDialog(campaign: Campaign) {
     setDeleteTarget(campaign);

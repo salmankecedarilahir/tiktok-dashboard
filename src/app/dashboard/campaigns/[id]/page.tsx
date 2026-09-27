@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, use } from "react";
+import { useCallback, useEffect, useState, use } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
@@ -150,7 +150,7 @@ export default function CampaignDetailPage({
     setForm((f) => ({ ...f, [key]: value }));
   }
 
-  async function loadCampaign() {
+  const loadCampaign = useCallback(async () => {
     try {
       const res = await fetch(`/api/campaigns/${id}`);
       const data = await res.json();
@@ -161,11 +161,12 @@ export default function CampaignDetailPage({
     } finally {
       setLoading(false);
     }
-  }
+  }, [id]);
 
   useEffect(() => {
-    loadCampaign();
-  }, [id]);
+    const timer = window.setTimeout(() => void loadCampaign(), 0);
+    return () => window.clearTimeout(timer);
+  }, [loadCampaign]);
 
   async function handleAddVideo() {
     if (!form.videoTitle.trim()) {

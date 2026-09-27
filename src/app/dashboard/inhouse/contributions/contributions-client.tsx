@@ -85,7 +85,8 @@ export function ContributionsClient() {
   }, []);
 
   useEffect(() => {
-    fetchPlans();
+    const timer = window.setTimeout(() => void fetchPlans(), 0);
+    return () => window.clearTimeout(timer);
   }, [fetchPlans]);
 
   async function handleCreatePlan(e: React.FormEvent) {

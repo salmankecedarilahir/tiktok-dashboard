@@ -1155,7 +1155,7 @@ export function CampaignReportPDF({ data }: { data: CampaignReportData }) {
         <View style={styles.ctaHero}>
           <Text style={styles.ctaLabel}>Ready for the next campaign?</Text>
           <Text style={styles.ctaTitle}>
-            Let's create more impact together.
+            Let&apos;s create more impact together.
           </Text>
           <Text style={styles.ctaText}>
             Setiap brand butuh storytelling yang authentic untuk reach Gen Z.

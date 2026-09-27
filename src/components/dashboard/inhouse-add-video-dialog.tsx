@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Loader2, Plus } from "lucide-react";
 import { toast } from "sonner";
 
@@ -56,12 +56,13 @@ export function InhouseAddVideoDialog({
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    if (!open) {
+  function handleOpenChange(nextOpen: boolean) {
+    setOpen(nextOpen);
+    if (!nextOpen) {
       setForm(EMPTY);
       setError(null);
     }
-  }, [open]);
+  }
 
   function update<K extends keyof FormState>(key: K, value: string) {
     setForm((f) => ({ ...f, [key]: value }));
@@ -116,7 +117,7 @@ export function InhouseAddVideoDialog({
         return;
       }
       toast.success("Video berhasil ditambahkan");
-      setOpen(false);
+      handleOpenChange(false);
       onSuccess();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Network error");
@@ -126,7 +127,7 @@ export function InhouseAddVideoDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>
         <Button size="sm">
           <Plus className="h-3.5 w-3.5" />
