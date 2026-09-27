@@ -1,0 +1,198 @@
+name: Guarded Production database migration
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: 'Type MIGRATE-PRODUCTION after reviewing this workflow and the recovery point'
+        required: true
+        type: string
+      recovery_verified:
+        description: 'A verified Production recovery point is preserved independently'
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tiktok-dashboard-production-db-migration
+  cancel-in-progress: false
+
+jobs:
+  reconcile:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    environment: production
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Require manual confirmation before accessing secrets
+        env:
+          CONFIRMATION: ${{ inputs.confirmation }}
+          RECOVERY_VERIFIED: ${{ inputs.recovery_verified }}
+        run: |
+          set -euo pipefail
+          [[ "$GITHUB_EVENT_NAME" == 'workflow_dispatch' ]]
+          [[ "$GITHUB_REPOSITORY" == 'salmankecedarilahir/tiktok-dashboard' ]]
+          [[ "$GITHUB_REF" == 'refs/heads/feat/contribution-plan' ]]
+          [[ "$CONFIRMATION" == 'MIGRATE-PRODUCTION' ]]
+          [[ "$RECOVERY_VERIFIED" == 'true' ]]
+          echo 'MANUAL CONFIRMATION AND RECOVERY ATTESTATION: PASS'
+
+      - name: Check out the exact dispatched commit
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Verify application baseline and release-only changes
+        run: |
+          set -euo pipefail
+          baseline='6967d75fd12dbef5cc4410ed9fedcce47c68e7a7'
+          [[ "$(git rev-parse HEAD)" == "$GITHUB_SHA" ]]
+          git merge-base --is-ancestor "$baseline" HEAD
+          source_status="$(git status --porcelain)"
+          [[ -z "$source_status" ]]
+          git diff --name-only -z "$baseline" HEAD > "$RUNNER_TEMP/migration-source-diff"
+          while IFS= read -r -d '' path; do
+            case "$path" in
+              .github/workflows/production-db-migration.yml|scripts/production-migration-preflight.mjs|docs/production-db-migration.md) ;;
+              *) echo 'FAIL: unreviewed application/source change after release baseline'; exit 1 ;;
+            esac
+          done < "$RUNNER_TEMP/migration-source-diff"
+          # Also reject application changes in intervening commits, even if reverted.
+          git log --format= --name-only "$baseline"..HEAD > "$RUNNER_TEMP/migration-source-history"
+          while IFS= read -r path; do
+            [[ -z "$path" ]] && continue
+            case "$path" in
+              .github/workflows/production-db-migration.yml|scripts/production-migration-preflight.mjs|docs/production-db-migration.md) ;;
+              *) echo 'FAIL: intervening commit changed application/source files'; exit 1 ;;
+            esac
+          done < "$RUNNER_TEMP/migration-source-history"
+          echo "SOURCE INTEGRITY: PASS; application baseline=$baseline; workflow source=$GITHUB_SHA"
+
+      - name: Set up the verified Node version
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '24.14.1'
+
+      - name: Install the frozen toolchain without Production secrets
+        env:
+          COREPACK_ENABLE_AUTO_PIN: '0'
+          COREPACK_DEFAULT_TO_LATEST: '0'
+        run: |
+          set -euo pipefail
+          corepack enable
+          corepack prepare pnpm@11.1.1 --activate
+          [[ "$(pnpm --version)" == '11.1.1' ]]
+          pnpm install --frozen-lockfile
+          node --input-type=module <<'NODE'
+          import { readFileSync } from 'node:fs';
+          for (const name of ['prisma', '@prisma/client']) {
+            const version = JSON.parse(readFileSync(`node_modules/${name}/package.json`, 'utf8')).version;
+            if (version !== '6.19.3') throw new Error('Unexpected Prisma toolchain version');
+          }
+          console.log('PRISMA CLI/CLIENT VERSION: 6.19.3 — PASS');
+          NODE
+          source_status="$(git status --porcelain)"
+          [[ -z "$source_status" ]]
+
+      - name: Read-only Production preflight
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DIRECT_URL: ${{ secrets.DIRECT_URL }}
+        run: |
+          set -euo pipefail
+          node scripts/production-migration-preflight.mjs identity
+          # No schema mutation; output is captured to avoid leaking native diagnostics.
+          node --input-type=module <<'NODE'
+          import { spawnSync } from 'node:child_process';
+          for (const command of ['validate', 'generate']) {
+            const result = spawnSync('timeout', ['--signal=TERM', '--kill-after=15s', '90s',
+              'pnpm', 'exec', 'prisma', command], { encoding: 'utf8', maxBuffer: 4 * 1024 * 1024 });
+            if (result.error || result.status !== 0) throw new Error(`Prisma ${command} failed; raw diagnostics suppressed`);
+            if (`${result.stdout ?? ''}\n${result.stderr ?? ''}`.includes('package.json#prisma')) {
+              console.log('KNOWN PRISMA WARNING: package.json#prisma configuration is deprecated in Prisma 6; no upgrade is performed.');
+            }
+            console.log(`PRISMA ${command.toUpperCase()}: PASS`);
+          }
+          NODE
+          node scripts/production-migration-preflight.mjs before
+
+      - name: Resolve only the already-present cost migration
+        id: resolve
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DIRECT_URL: ${{ secrets.DIRECT_URL }}
+        run: |
+          set -euo pipefail
+          # Recheck live state and identity immediately before ledger mutation.
+          node scripts/production-migration-preflight.mjs before
+          node --input-type=module <<'NODE'
+          import { spawnSync } from 'node:child_process';
+          const result = spawnSync('timeout', ['--signal=TERM', '--kill-after=15s', '180s',
+            'pnpm', 'exec', 'prisma', 'migrate', 'resolve', '--applied',
+            '20260923153500_add_contribution_production_costs'], { encoding: 'utf8', maxBuffer: 4 * 1024 * 1024 });
+          if (result.error || result.status !== 0) {
+            console.error('FAIL: resolve did not finish successfully. Inspect the ledger before any further action; no automatic retry or rollback.');
+            process.exit(1);
+          }
+          console.log('RESOLVE: PASS — 20260923153500_add_contribution_production_costs');
+          NODE
+
+      - name: Verify post-resolve ledger and Campaign-link safety
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DIRECT_URL: ${{ secrets.DIRECT_URL }}
+        run: |
+          set -euo pipefail
+          node scripts/production-migration-preflight.mjs resolved
+
+      - name: Apply only the Campaign-link migration
+        id: deploy
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DIRECT_URL: ${{ secrets.DIRECT_URL }}
+        run: |
+          set -euo pipefail
+          # Includes status, exactly seven complete ledger records, live link checks,
+          # reviewed SQL, identity, checksums and unchanged counts before mutation.
+          node scripts/production-migration-preflight.mjs resolved
+          node --input-type=module <<'NODE'
+          import { spawnSync } from 'node:child_process';
+          import { verifyDeployOutput } from './scripts/production-migration-preflight.mjs';
+          const result = spawnSync('timeout', ['--signal=TERM', '--kill-after=15s', '180s',
+            'pnpm', 'exec', 'prisma', 'migrate', 'deploy'], { encoding: 'utf8', maxBuffer: 4 * 1024 * 1024 });
+          try { verifyDeployOutput(result); } catch {
+            console.error('FAIL: deploy failed or did not apply exactly the permitted migration. Cost resolution may already be recorded; stop and inspect. No automatic retry or destructive rollback.');
+            process.exit(1);
+          }
+          console.log('DEPLOY: PASS — 20260924120000_link_contribution_plans_to_campaigns');
+          NODE
+
+      - name: Verify final schema, migration history and every baseline count
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DIRECT_URL: ${{ secrets.DIRECT_URL }}
+        run: |
+          set -euo pipefail
+          node scripts/production-migration-preflight.mjs final
+
+      - name: Record execution outcome without rollback or application release
+        if: ${{ always() }}
+        env:
+          RESOLVE_OUTCOME: ${{ steps.resolve.outcome }}
+          DEPLOY_OUTCOME: ${{ steps.deploy.outcome }}
+          JOB_STATUS: ${{ job.status }}
+        run: |
+          set -euo pipefail
+          {
+            echo '## Production database workflow outcome'
+            echo "Job: $JOB_STATUS; resolve: $RESOLVE_OUTCOME; deploy: $DEPLOY_OUTCOME"
+            echo 'On failure or cancellation, inspect the live ledger and schema before further action. A command may have partially completed.'
+            echo 'No automatic retry, database rollback, application release, branch mutation or seed is performed.'
+          } >> "$GITHUB_STEP_SUMMARY"
