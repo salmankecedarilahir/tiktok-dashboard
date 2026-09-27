@@ -4,6 +4,7 @@ import { Role } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { createLogger } from "@/lib/logger";
 import { getSessionOrThrow, requireRole, handleAuthError } from "@/lib/auth-helpers";
+import { createDraftContributionPlanForCampaign } from "@/lib/contribution-server";
 
 const log = createLogger({ module: "api/briefs/[id]/convert-to-campaign" });
 
@@ -56,16 +57,28 @@ export async function POST(
         },
       });
 
-      return { campaign, brief: updatedBrief };
+      // Auto-create draft Contribution Plan for this campaign
+      const contributionPlan = await createDraftContributionPlanForCampaign({
+        campaignId: campaign.id,
+        brandName: brief.brandName,
+        campaignName: brief.campaignName!,
+        totalAmount: brief.customPrice ?? 0,
+        notes: brief.description ? `Brief: ${brief.description}` : null,
+        date: brief.startDate ?? new Date(),
+        tx,
+      });
+
+      return { campaign, brief: updatedBrief, contributionPlan };
     });
 
     log.info(
       {
         briefId: id,
         campaignId: result.campaign.id,
+        contributionPlanId: result.contributionPlan.id,
         brand: brief.brandName,
       },
-      "Converted brief to campaign"
+      "Converted brief to campaign and created draft contribution plan"
     );
 
     return NextResponse.json({
@@ -76,6 +89,12 @@ export async function POST(
         endDate: result.campaign.endDate.toISOString(),
         createdAt: result.campaign.createdAt.toISOString(),
         updatedAt: result.campaign.updatedAt.toISOString(),
+      },
+      contributionPlan: {
+        id: result.contributionPlan.id,
+        title: result.contributionPlan.title,
+        status: result.contributionPlan.status,
+        totalAmount: Number(result.contributionPlan.totalAmount),
       },
     });
   } catch (err) {

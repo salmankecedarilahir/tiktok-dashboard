@@ -1,0 +1,2 @@
+# This tracked page uses CRLF in Git; treat its carriage returns as line endings.
+src/app/dashboard/campaigns/page.tsx whitespace=cr-at-eol

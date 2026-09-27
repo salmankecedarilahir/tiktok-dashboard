@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -55,21 +55,6 @@ export function InhouseEditVideoDialog({
   }));
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-
-  useEffect(() => {
-    if (open) {
-      setForm({
-        caption: video.caption ?? "",
-        postedAt: toDateInput(video.postedAt),
-        views: String(video.views),
-        likes: String(video.likes),
-        comments: String(video.comments),
-        shares: String(video.shares),
-        evaluation: video.evaluation ?? "",
-      });
-      setError(null);
-    }
-  }, [open, video]);
 
   function update<K extends keyof FormState>(key: K, value: string) {
     setForm((f) => ({ ...f, [key]: value }));
