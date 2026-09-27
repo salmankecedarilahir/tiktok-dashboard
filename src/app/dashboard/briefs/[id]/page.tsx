@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, use } from "react";
+import { useCallback, useEffect, useState, use } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
@@ -12,7 +12,6 @@ import {
   ArrowLeft,
   Save,
   Building2,
-  Calendar,
   Tag,
   User,
   FileText,
@@ -86,7 +85,7 @@ export default function BriefDetailPage({
   const [converting, setConverting] = useState(false);
   const [form, setForm] = useState<Partial<BriefDetail>>({});
 
-  async function loadBrief() {
+  const loadBrief = useCallback(async () => {
     try {
       const res = await fetch("/api/briefs/" + id);
       const data = await res.json();
@@ -101,11 +100,12 @@ export default function BriefDetailPage({
     } finally {
       setLoading(false);
     }
-  }
+  }, [id]);
 
   useEffect(() => {
-    loadBrief();
-  }, [id]);
+    const timer = window.setTimeout(() => void loadBrief(), 0);
+    return () => window.clearTimeout(timer);
+  }, [loadBrief]);
 
   function update<K extends keyof BriefDetail>(key: K, value: BriefDetail[K]) {
     setForm((f) => ({ ...f, [key]: value }));
@@ -193,7 +193,7 @@ export default function BriefDetailPage({
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Convert failed");
 
-      toast.success("Brief converted to Campaign");
+      toast.success("Brief di-convert ke Campaign & Draft Contribution Plan berhasil dibuat!");
       router.push("/dashboard/campaigns/" + data.campaign.id);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Convert failed");

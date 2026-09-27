@@ -6,6 +6,8 @@ if (!process.env.NEXT_RUNTIME && process.env.NODE_ENV !== "test") {
   try {
     // Dynamic require biar nggak crash kalau dotenv belum ke-install
     // (Next.js bundling akan skip block ini di production build)
+    // Keep dotenv optional for standalone scripts without importing it into the Next runtime.
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     require("dotenv").config();
   } catch {
     // dotenv not available — Next.js runtime handles it

@@ -24,6 +24,15 @@ export async function GET(
         videos: {
           orderBy: { postedAt: "desc" },
         },
+        contributionPlan: {
+          select: {
+            id: true,
+            title: true,
+            status: true,
+            totalAmount: true,
+            createdAt: true,
+          },
+        },
       },
     });
 
@@ -38,6 +47,13 @@ export async function GET(
         endDate: campaign.endDate.toISOString(),
         createdAt: campaign.createdAt.toISOString(),
         updatedAt: campaign.updatedAt.toISOString(),
+        contributionPlan: campaign.contributionPlan
+          ? {
+              ...campaign.contributionPlan,
+              totalAmount: Number(campaign.contributionPlan.totalAmount),
+              createdAt: campaign.contributionPlan.createdAt.toISOString(),
+            }
+          : null,
         videos: campaign.videos.map((v) => ({
           ...v,
           views: Number(v.views),
@@ -60,7 +76,7 @@ export async function GET(
 }
 
 export async function DELETE(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
@@ -68,11 +84,40 @@ export async function DELETE(
     requireRole(session, [Role.ADMIN, Role.EDITOR]);
     const { id } = await params;
 
-    await prisma.campaign.delete({ where: { id } });
+    const shouldDeletePlan = req.nextUrl.searchParams.get("deleteContributionPlan") === "true";
 
-    log.info({ id }, "Deleted campaign");
+    const campaign = await prisma.campaign.findUnique({
+      where: { id },
+      select: { id: true, brandName: true },
+    });
 
-    return NextResponse.json({ success: true });
+    if (!campaign) {
+      return NextResponse.json({ error: "Campaign not found" }, { status: 404 });
+    }
+
+    let deletedPlanCount = 0;
+
+    await prisma.$transaction(async (tx) => {
+      if (shouldDeletePlan) {
+        const deleteResult = await tx.contributionPlan.deleteMany({
+          where: { campaignId: id },
+        });
+        deletedPlanCount = deleteResult.count;
+      }
+
+      await tx.campaign.delete({ where: { id } });
+    });
+
+    log.info(
+      { id, brand: campaign.brandName, shouldDeletePlan, deletedPlanCount },
+      "Deleted campaign"
+    );
+
+    return NextResponse.json({
+      success: true,
+      deletedContributionPlan: shouldDeletePlan && deletedPlanCount > 0,
+      deletedPlanCount,
+    });
   } catch (err) {
     const authResp = handleAuthError(err);
     if (authResp) return authResp;

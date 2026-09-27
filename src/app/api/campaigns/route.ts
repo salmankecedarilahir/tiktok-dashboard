@@ -5,6 +5,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { createLogger } from "@/lib/logger";
 import { getSessionOrThrow, requireRole, handleAuthError } from "@/lib/auth-helpers";
+import { createDraftContributionPlanForCampaign } from "@/lib/contribution-server";
 
 const log = createLogger({ module: "api/campaigns" });
 
@@ -26,22 +27,24 @@ export async function GET() {
     const campaigns = await prisma.campaign.findMany({
       include: {
         _count: { select: { videos: true } },
+        contributionPlan: { select: { id: true, title: true, status: true } },
       },
       orderBy: { createdAt: "desc" },
     });
 
     return NextResponse.json({
       campaigns: campaigns.map((c) => ({
-        id: c.id,
-        brandName: c.brandName,
-        brandLogoUrl: c.brandLogoUrl,
-        campaignName: c.campaignName,
-        packageType: c.packageType,
-        startDate: c.startDate.toISOString(),
-        endDate: c.endDate.toISOString(),
-        notes: c.notes,
-        videoCount: c._count.videos,
-        createdAt: c.createdAt.toISOString(),
+          id: c.id,
+          brandName: c.brandName,
+          brandLogoUrl: c.brandLogoUrl,
+          campaignName: c.campaignName,
+          packageType: c.packageType,
+          startDate: c.startDate.toISOString(),
+          endDate: c.endDate.toISOString(),
+          notes: c.notes,
+          videoCount: c._count.videos,
+          createdAt: c.createdAt.toISOString(),
+          contributionPlan: c.contributionPlan,
       })),
     });
   } catch (err) {
@@ -70,21 +73,51 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const campaign = await prisma.campaign.create({
-      data: {
+    const result = await prisma.$transaction(async (tx) => {
+      const campaign = await tx.campaign.create({
+        data: {
+          brandName: parsed.brandName,
+          brandLogoUrl: parsed.brandLogoUrl ?? null,
+          campaignName: parsed.campaignName,
+          packageType: parsed.packageType ?? null,
+          startDate,
+          endDate,
+          notes: parsed.notes ?? null,
+        },
+      });
+
+      const contributionPlan = await createDraftContributionPlanForCampaign({
+        campaignId: campaign.id,
         brandName: parsed.brandName,
-        brandLogoUrl: parsed.brandLogoUrl ?? null,
         campaignName: parsed.campaignName,
-        packageType: parsed.packageType ?? null,
-        startDate,
-        endDate,
+        totalAmount: 0,
         notes: parsed.notes ?? null,
-      },
+        date: startDate,
+        tx,
+      });
+
+      return { campaign, contributionPlan };
     });
 
-    log.info({ id: campaign.id, brand: campaign.brandName }, "Created campaign");
+    log.info(
+      {
+        id: result.campaign.id,
+        brand: result.campaign.brandName,
+        contributionPlanId: result.contributionPlan.id,
+      },
+      "Created campaign and draft contribution plan"
+    );
 
-    return NextResponse.json({ success: true, campaign });
+    return NextResponse.json({
+      success: true,
+      campaign: result.campaign,
+      contributionPlan: {
+        id: result.contributionPlan.id,
+        title: result.contributionPlan.title,
+        status: result.contributionPlan.status,
+        totalAmount: Number(result.contributionPlan.totalAmount),
+      },
+    });
   } catch (err) {
     const authResp = handleAuthError(err);
     if (authResp) return authResp;

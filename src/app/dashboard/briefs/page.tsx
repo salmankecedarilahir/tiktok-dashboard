@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -60,7 +60,7 @@ export default function BriefsPage() {
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState<string | null>(null);
 
-  async function loadBriefs() {
+  const loadBriefs = useCallback(async () => {
     try {
       const res = await fetch("/api/briefs");
       const data = await res.json();
@@ -71,11 +71,12 @@ export default function BriefsPage() {
     } finally {
       setLoading(false);
     }
-  }
+  }, []);
 
   useEffect(() => {
-    loadBriefs();
-  }, []);
+    const timer = window.setTimeout(() => void loadBriefs(), 0);
+    return () => window.clearTimeout(timer);
+  }, [loadBriefs]);
 
   async function handleDelete(id: string, brandName: string) {
     if (!confirm("Delete brief untuk " + brandName + "?")) return;
